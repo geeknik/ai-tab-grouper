@@ -1,7 +1,7 @@
 {
   "name": "tab-grouping-extension",
   "version": "1.0.0",
-  "description": "A Chrome extension for intelligent tab grouping",
+  "description": "A Brave extension for intelligent tab grouping",
   "main": "background.js",
   "scripts": {
     "test": "jest"
