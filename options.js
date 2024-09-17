@@ -1,4 +1,3 @@
-
 // Function to save settings
 function saveSettings() {
     const settings = {
