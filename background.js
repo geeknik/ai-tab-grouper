@@ -340,9 +340,17 @@ async function groupTabs() {
         // Group tabs based on clusters
         for (const cluster of clusters) {
             if (cluster.length > 1) {
-                const groupId = await chrome.tabs.group({ tabIds: cluster.map(Number) });
-                const groupName = generateGroupName(cluster.map(tabId => `${tabs.find(t => t.id === Number(tabId)).url} ${tabs.find(t => t.id === Number(tabId)).title}`));
-                await chrome.tabGroups.update(groupId, { title: groupName });
+                try {
+                    const groupId = await chrome.tabs.group({ tabIds: cluster.map(Number) });
+                    const groupName = generateGroupName(cluster.map(tabId => `${tabs.find(t => t.id === Number(tabId)).url} ${tabs.find(t => t.id === Number(tabId)).title}`));
+                    await chrome.tabGroups.update(groupId, { title: groupName });
+                } catch (error) {
+                    console.error('Error creating or updating tab group:', error);
+                    // You might want to add additional error handling here, such as:
+                    // - Attempting to regroup the tabs
+                    // - Skipping the problematic cluster
+                    // - Logging more detailed information for debugging
+                }
             }
         }
 
