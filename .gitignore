@@ -1,1 +1,26 @@
+# Ignore .aider files
 .aider*
+
+# Ignore node_modules directory
+node_modules/
+
+# Ignore build output
+dist/
+
+# Ignore temporary files
+*.tmp
+*.temp
+
+# Ignore IDE-specific files
+.vscode/
+.idea/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore log files
+*.log
+
+# Ignore zip files (often used for packaging extensions)
+*.zip
