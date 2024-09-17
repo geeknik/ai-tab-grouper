@@ -11,7 +11,7 @@ let settings = {
     similarityThreshold: 0.3,
     groupingInterval: 5,
     maxGroupNameLength: 15,
-    groupingAlgorithm: 'tfidf', // 'tfidf', 'bm25', or 'keyphrase'
+    groupingAlgorithm: 'tfidf', // 'tfidf', 'bm25', 'keyphrase', or 'hac'
     bm25k1: 1.5,
     bm25b: 0.75,
 };
@@ -96,30 +96,53 @@ function updateBM25(newDocument, docId) {
     // Calculate average document length
     const avgDocLength = Object.values(bm25).reduce((sum, doc) => sum + doc.docLength, 0) / Object.keys(bm25).length;
 
-    // Update BM25 scores
+    // Update BM25 scores with document length normalization
     Object.keys(bm25).forEach(id => {
         const doc = bm25[id];
+        const normalizationFactor = 1 - settings.bm25b + settings.bm25b * (doc.docLength / avgDocLength);
         Object.keys(doc.termFreq).forEach(term => {
             const tf = doc.termFreq[term];
             const numerator = tf * (settings.bm25k1 + 1);
-            const denominator = tf + settings.bm25k1 * (1 - settings.bm25b + settings.bm25b * (doc.docLength / avgDocLength));
+            const denominator = tf + settings.bm25k1 * normalizationFactor;
             bm25[id].termFreq[term] = idf[term] * (numerator / denominator);
         });
     });
 }
 
-// Simple keyphrase extraction function
+// RAKE (Rapid Automatic Keyword Extraction) implementation
 function extractKeyphrases(text, numPhrases = 5) {
-    const words = text.toLowerCase().split(/\W+/).filter(word => word.length > 3);
+    const stopWords = new Set(['the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']);
+    const words = text.toLowerCase().split(/\W+/).filter(word => word.length > 1 && !stopWords.has(word));
     const phrases = [];
-    for (let i = 0; i < words.length - 1; i++) {
-        phrases.push(words[i] + ' ' + words[i + 1]);
-    }
-    const phraseFreq = {};
-    phrases.forEach(phrase => {
-        phraseFreq[phrase] = (phraseFreq[phrase] || 0) + 1;
+    let currentPhrase = [];
+
+    words.forEach(word => {
+        if (stopWords.has(word)) {
+            if (currentPhrase.length > 0) {
+                phrases.push(currentPhrase.join(' '));
+                currentPhrase = [];
+            }
+        } else {
+            currentPhrase.push(word);
+        }
     });
-    return Object.entries(phraseFreq)
+
+    if (currentPhrase.length > 0) {
+        phrases.push(currentPhrase.join(' '));
+    }
+
+    const wordScores = {};
+    words.forEach(word => {
+        wordScores[word] = (wordScores[word] || 0) + 1;
+    });
+
+    const phraseScores = phrases.map(phrase => {
+        const words = phrase.split(' ');
+        const score = words.reduce((sum, word) => sum + wordScores[word], 0) / words.length;
+        return [phrase, score];
+    });
+
+    return phraseScores
         .sort((a, b) => b[1] - a[1])
         .slice(0, numPhrases)
         .map(entry => entry[0]);
@@ -161,6 +184,10 @@ function jaccardSimilarity(set1, set2) {
 
 // Function to cluster tabs based on the chosen algorithm
 function clusterTabs(tabVectors) {
+    if (settings.groupingAlgorithm === 'hac') {
+        return hierarchicalAgglomerativeClustering(tabVectors);
+    }
+
     const clusters = [];
     const assigned = new Set();
 
@@ -197,6 +224,51 @@ function clusterTabs(tabVectors) {
     });
 
     return clusters;
+}
+
+// Hierarchical Agglomerative Clustering (HAC) implementation
+function hierarchicalAgglomerativeClustering(tabVectors) {
+    const tabIds = Object.keys(tabVectors);
+    let clusters = tabIds.map(id => [id]);
+
+    while (clusters.length > 1) {
+        let maxSimilarity = -1;
+        let mergeIndices = [-1, -1];
+
+        for (let i = 0; i < clusters.length; i++) {
+            for (let j = i + 1; j < clusters.length; j++) {
+                const similarity = clusterSimilarity(clusters[i], clusters[j], tabVectors);
+                if (similarity > maxSimilarity) {
+                    maxSimilarity = similarity;
+                    mergeIndices = [i, j];
+                }
+            }
+        }
+
+        if (maxSimilarity < settings.similarityThreshold) {
+            break;
+        }
+
+        const [i, j] = mergeIndices;
+        clusters[i] = clusters[i].concat(clusters[j]);
+        clusters.splice(j, 1);
+    }
+
+    return clusters.filter(cluster => cluster.length > 1);
+}
+
+function clusterSimilarity(cluster1, cluster2, tabVectors) {
+    let totalSimilarity = 0;
+    let comparisons = 0;
+
+    for (const id1 of cluster1) {
+        for (const id2 of cluster2) {
+            totalSimilarity += cosineSimilarity(tabVectors[id1], tabVectors[id2]);
+            comparisons++;
+        }
+    }
+
+    return totalSimilarity / comparisons;
 }
 
 // Function to generate a group name based on common terms
