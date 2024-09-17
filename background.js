@@ -310,28 +310,36 @@ async function groupTabs() {
 
         for (const tab of tabs) {
             if (isGroupableTab(tab)) {
-                const features = await extractTabFeatures(tab);
-                if (features) {
-                    if (settings.groupingAlgorithm === 'tfidf') {
-                        updateTFIDF(features, tab.id.toString());
-                    } else if (settings.groupingAlgorithm === 'bm25') {
-                        updateBM25(features, tab.id.toString());
-                    } else if (settings.groupingAlgorithm === 'keyphrase') {
-                        updateKeyphrases(features, tab.id.toString());
+                try {
+                    const features = await extractTabFeatures(tab);
+                    if (features) {
+                        if (settings.groupingAlgorithm === 'tfidf') {
+                            updateTFIDF(features, tab.id.toString());
+                        } else if (settings.groupingAlgorithm === 'bm25') {
+                            updateBM25(features, tab.id.toString());
+                        } else if (settings.groupingAlgorithm === 'keyphrase') {
+                            updateKeyphrases(features, tab.id.toString());
+                        }
+                        tabIds.push(tab.id);
                     }
-                    tabIds.push(tab.id);
+                } catch (error) {
+                    console.error(`Error processing tab ${tab.id}:`, error);
                 }
             }
         }
 
         const tabVectors = {};
         tabIds.forEach((tabId) => {
-            if (settings.groupingAlgorithm === 'tfidf') {
-                tabVectors[tabId] = tfidf[tabId.toString()];
-            } else if (settings.groupingAlgorithm === 'bm25') {
-                tabVectors[tabId] = bm25[tabId.toString()].termFreq;
-            } else if (settings.groupingAlgorithm === 'keyphrase') {
-                tabVectors[tabId] = keyphrases[tabId.toString()];
+            try {
+                if (settings.groupingAlgorithm === 'tfidf') {
+                    tabVectors[tabId] = tfidf[tabId.toString()];
+                } else if (settings.groupingAlgorithm === 'bm25') {
+                    tabVectors[tabId] = bm25[tabId.toString()].termFreq;
+                } else if (settings.groupingAlgorithm === 'keyphrase') {
+                    tabVectors[tabId] = keyphrases[tabId.toString()];
+                }
+            } catch (error) {
+                console.error(`Error creating vector for tab ${tabId}:`, error);
             }
         });
 
@@ -346,10 +354,6 @@ async function groupTabs() {
                     await chrome.tabGroups.update(groupId, { title: groupName });
                 } catch (error) {
                     console.error('Error creating or updating tab group:', error);
-                    // You might want to add additional error handling here, such as:
-                    // - Attempting to regroup the tabs
-                    // - Skipping the problematic cluster
-                    // - Logging more detailed information for debugging
                 }
             }
         }
