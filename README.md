@@ -35,7 +35,7 @@ In the settings page, you can adjust:
 
 ## Privacy
 
-This extension does not collect or transmit any personal data. All processing is done locally in your browser.
+This extension [does not collect or transmit any personal data](PRIVACY.md). All processing is done locally in your browser.
 
 ## Contributing
 
