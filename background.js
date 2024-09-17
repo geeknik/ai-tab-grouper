@@ -44,19 +44,26 @@ function isGroupableTab(tab) {
 
 // Function to calculate TF-IDF incrementally
 function updateTFIDF(newDocument, docId) {
-    const terms = newDocument.split(/\W+/);
+    const terms = newDocument.split(/\W+/).filter(term => term.length > 2);
     const termFreq = {};
+    const docLength = terms.length;
     terms.forEach(term => {
         term = term.toLowerCase();
         termFreq[term] = (termFreq[term] || 0) + 1;
         vocabulary.add(term);
     });
+    
+    // Calculate TF with length normalization
+    Object.keys(termFreq).forEach(term => {
+        termFreq[term] = termFreq[term] / docLength;
+    });
+    
     tfidf[docId] = termFreq;
 
     // Update IDF
     vocabulary.forEach(term => {
         const docCount = Object.values(tfidf).filter(doc => doc[term]).length;
-        idf[term] = Math.log(Object.keys(tfidf).length / (docCount + 1));
+        idf[term] = Math.log((Object.keys(tfidf).length + 1) / (docCount + 1)) + 1;
     });
 
     // Update TF-IDF scores
@@ -125,13 +132,23 @@ function updateKeyphrases(newDocument, docId) {
 
 // Function to get cosine similarity between two documents
 function cosineSimilarity(doc1, doc2) {
-    const dotProduct = Object.keys(doc1).reduce((sum, term) => {
-        return sum + (doc1[term] * (doc2[term] || 0));
-    }, 0);
+    const commonTerms = new Set([...Object.keys(doc1), ...Object.keys(doc2)]);
+    let dotProduct = 0;
+    let magnitude1 = 0;
+    let magnitude2 = 0;
 
-    const magnitude1 = Math.sqrt(Object.values(doc1).reduce((sum, val) => sum + val * val, 0));
-    const magnitude2 = Math.sqrt(Object.values(doc2).reduce((sum, val) => sum + val * val, 0));
+    commonTerms.forEach(term => {
+        const val1 = doc1[term] || 0;
+        const val2 = doc2[term] || 0;
+        dotProduct += val1 * val2;
+        magnitude1 += val1 * val1;
+        magnitude2 += val2 * val2;
+    });
 
+    magnitude1 = Math.sqrt(magnitude1);
+    magnitude2 = Math.sqrt(magnitude2);
+
+    if (magnitude1 === 0 || magnitude2 === 0) return 0;
     return dotProduct / (magnitude1 * magnitude2);
 }
 
@@ -147,12 +164,18 @@ function clusterTabs(tabVectors) {
     const clusters = [];
     const assigned = new Set();
 
-    Object.keys(tabVectors).forEach(tabId => {
+    const sortedTabIds = Object.keys(tabVectors).sort((a, b) => {
+        const sumA = Object.values(tabVectors[a]).reduce((sum, val) => sum + val, 0);
+        const sumB = Object.values(tabVectors[b]).reduce((sum, val) => sum + val, 0);
+        return sumB - sumA;
+    });
+
+    sortedTabIds.forEach(tabId => {
         if (!assigned.has(tabId)) {
             const cluster = [tabId];
             assigned.add(tabId);
 
-            Object.keys(tabVectors).forEach(otherTabId => {
+            sortedTabIds.forEach(otherTabId => {
                 if (tabId !== otherTabId && !assigned.has(otherTabId)) {
                     let similarity;
                     if (settings.groupingAlgorithm === 'keyphrase') {
@@ -167,7 +190,9 @@ function clusterTabs(tabVectors) {
                 }
             });
 
-            clusters.push(cluster);
+            if (cluster.length > 1) {
+                clusters.push(cluster);
+            }
         }
     });
 
@@ -178,13 +203,20 @@ function clusterTabs(tabVectors) {
 function generateGroupName(clusterDocs) {
     const combinedTerms = clusterDocs.join(' ').toLowerCase().split(/\W+/);
     const termFreq = {};
+    const stopWords = new Set(['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']);
+    
     combinedTerms.forEach(term => {
-        if (term.length > 3) { // Ignore short terms
+        if (term.length > 3 && !stopWords.has(term)) {
             termFreq[term] = (termFreq[term] || 0) + 1;
         }
     });
-    const sortedTerms = Object.entries(termFreq).sort((a, b) => b[1] - a[1]);
-    return sortedTerms.slice(0, 2).map(([term]) => term).join('-').substring(0, settings.maxGroupNameLength);
+    
+    const sortedTerms = Object.entries(termFreq)
+        .sort((a, b) => b[1] - a[1])
+        .filter(([term]) => !term.match(/^\d+$/)); // Remove purely numeric terms
+    
+    const topTerms = sortedTerms.slice(0, 3).map(([term]) => term);
+    return topTerms.join('-').substring(0, settings.maxGroupNameLength);
 }
 
 // Function to extract features from a tab
@@ -192,7 +224,10 @@ async function extractTabFeatures(tab) {
     if (!isGroupableTab(tab)) {
         return null;
     }
-    return `${tab.url} ${tab.title}`;
+    const url = new URL(tab.url);
+    const domain = url.hostname;
+    const path = url.pathname;
+    return `${domain} ${path} ${tab.title}`;
 }
 
 // Function to group tabs
