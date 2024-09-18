@@ -112,7 +112,7 @@ function updateBM25(newDocument, docId) {
 // RAKE (Rapid Automatic Keyword Extraction) implementation
 function extractKeyphrases(text, numPhrases = 5) {
     const stopWords = new Set(['the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']);
-    const words = text.toLowerCase().split(/\W+/).filter(word => word.length > 1 && !stopWords.has(word));
+    const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(word => word.length > 1 && !stopWords.has(word));
     const phrases = [];
     let currentPhrase = [];
 
