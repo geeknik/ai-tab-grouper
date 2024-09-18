@@ -116,11 +116,9 @@ function extractKeyphrases(text, numPhrases = 5) {
     
     const phrases = [];
     for (let i = 0; i < words.length; i++) {
-        for (let j = i + 1; j <= words.length; j++) {
+        for (let j = i + 1; j <= Math.min(i + 3, words.length); j++) {
             const phrase = words.slice(i, j).join(' ');
-            if (phrase.split(' ').length <= 3) {  // Limit phrase length to 3 words
-                phrases.push(phrase);
-            }
+            phrases.push(phrase);
         }
     }
 
