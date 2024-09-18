@@ -122,14 +122,20 @@ function extractKeyphrases(text, numPhrases = 5) {
         }
     }
 
+    const wordScores = words.reduce((scores, word) => {
+        scores[word] = (scores[word] || 0) + 1;
+        return scores;
+    }, {});
+
     const phraseScores = phrases.map(phrase => {
-        const score = phrase.split(' ').reduce((sum, word) => sum + words.filter(w => w === word).length, 0) / phrase.split(' ').length;
+        const phraseWords = phrase.split(' ');
+        const score = phraseWords.reduce((sum, word) => sum + wordScores[word], 0) / phraseWords.length;
         return [phrase, score];
     });
 
-    // Sort phrases by score (descending), then by length (ascending), and finally alphabetically
+    // Sort phrases by score (descending), then by length (descending), and finally alphabetically
     return phraseScores
-        .sort((a, b) => b[1] - a[1] || a[0].split(' ').length - b[0].split(' ').length || a[0].localeCompare(b[0]))
+        .sort((a, b) => b[1] - a[1] || b[0].split(' ').length - a[0].split(' ').length || a[0].localeCompare(b[0]))
         .slice(0, numPhrases)
         .map(entry => entry[0]);
 }
