@@ -197,12 +197,12 @@ function clusterTabs(tabVectors) {
         return sumB - sumA;
     });
 
-    sortedTabIds.forEach(tabId => {
+    for (const tabId of sortedTabIds) {
         if (!assigned.has(tabId)) {
             const cluster = [tabId];
             assigned.add(tabId);
 
-            sortedTabIds.forEach(otherTabId => {
+            for (const otherTabId of sortedTabIds) {
                 if (tabId !== otherTabId && !assigned.has(otherTabId)) {
                     let similarity;
                     if (settings.groupingAlgorithm === 'keyphrase') {
@@ -215,16 +215,30 @@ function clusterTabs(tabVectors) {
                         assigned.add(otherTabId);
                     }
                 }
-            });
+            }
 
             if (cluster.length > 1) {
                 clusters.push(cluster);
             }
         }
-    });
+    }
 
     return clusters;
 }
+
+// Memoized cosine similarity function
+const memoizedCosineSimilarity = (() => {
+    const cache = new Map();
+    return (doc1, doc2) => {
+        const key = `${doc1.id}-${doc2.id}`;
+        if (cache.has(key)) {
+            return cache.get(key);
+        }
+        const similarity = cosineSimilarity(doc1, doc2);
+        cache.set(key, similarity);
+        return similarity;
+    };
+})();
 
 // Hierarchical Agglomerative Clustering (HAC) implementation
 function hierarchicalAgglomerativeClustering(tabVectors) {
@@ -296,10 +310,17 @@ async function extractTabFeatures(tab) {
     if (!isGroupableTab(tab)) {
         return null;
     }
-    const url = new URL(tab.url);
-    const domain = url.hostname;
-    const path = url.pathname;
-    return `${domain} ${path} ${tab.title}`;
+    try {
+        const url = new URL(tab.url);
+        const domain = url.hostname;
+        const path = url.pathname;
+        const queryParams = url.searchParams.toString();
+        const cleanTitle = tab.title.replace(/[^\w\s-]/g, ''); // Remove special characters from title
+        return `${domain} ${path} ${queryParams} ${cleanTitle}`.toLowerCase();
+    } catch (error) {
+        console.error(`Error extracting features from tab ${tab.id}:`, error);
+        return null;
+    }
 }
 
 // Function to group tabs
@@ -307,18 +328,29 @@ async function groupTabs() {
     try {
         const tabs = await chrome.tabs.query({ currentWindow: true });
         const tabIds = [];
+        const tabVectors = {};
 
         for (const tab of tabs) {
             if (isGroupableTab(tab)) {
                 try {
                     const features = await extractTabFeatures(tab);
                     if (features) {
-                        if (settings.groupingAlgorithm === 'tfidf') {
-                            updateTFIDF(features, tab.id.toString());
-                        } else if (settings.groupingAlgorithm === 'bm25') {
-                            updateBM25(features, tab.id.toString());
-                        } else if (settings.groupingAlgorithm === 'keyphrase') {
-                            updateKeyphrases(features, tab.id.toString());
+                        const tabId = tab.id.toString();
+                        switch (settings.groupingAlgorithm) {
+                            case 'tfidf':
+                                updateTFIDF(features, tabId);
+                                tabVectors[tabId] = tfidf[tabId];
+                                break;
+                            case 'bm25':
+                                updateBM25(features, tabId);
+                                tabVectors[tabId] = bm25[tabId].termFreq;
+                                break;
+                            case 'keyphrase':
+                                updateKeyphrases(features, tabId);
+                                tabVectors[tabId] = keyphrases[tabId];
+                                break;
+                            default:
+                                throw new Error(`Unknown grouping algorithm: ${settings.groupingAlgorithm}`);
                         }
                         tabIds.push(tab.id);
                     }
@@ -328,21 +360,6 @@ async function groupTabs() {
             }
         }
 
-        const tabVectors = {};
-        tabIds.forEach((tabId) => {
-            try {
-                if (settings.groupingAlgorithm === 'tfidf') {
-                    tabVectors[tabId] = tfidf[tabId.toString()];
-                } else if (settings.groupingAlgorithm === 'bm25') {
-                    tabVectors[tabId] = bm25[tabId.toString()].termFreq;
-                } else if (settings.groupingAlgorithm === 'keyphrase') {
-                    tabVectors[tabId] = keyphrases[tabId.toString()];
-                }
-            } catch (error) {
-                console.error(`Error creating vector for tab ${tabId}:`, error);
-            }
-        });
-
         const clusters = clusterTabs(tabVectors);
 
         // Group tabs based on clusters
@@ -350,7 +367,10 @@ async function groupTabs() {
             if (cluster.length > 1) {
                 try {
                     const groupId = await chrome.tabs.group({ tabIds: cluster.map(Number) });
-                    const groupName = generateGroupName(cluster.map(tabId => `${tabs.find(t => t.id === Number(tabId)).url} ${tabs.find(t => t.id === Number(tabId)).title}`));
+                    const groupName = generateGroupName(cluster.map(tabId => {
+                        const tab = tabs.find(t => t.id === Number(tabId));
+                        return tab ? `${tab.url} ${tab.title}` : '';
+                    }).filter(Boolean));
                     await chrome.tabGroups.update(groupId, { title: groupName });
                 } catch (error) {
                     console.error('Error creating or updating tab group:', error);
