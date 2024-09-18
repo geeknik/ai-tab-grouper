@@ -466,3 +466,13 @@ async function initialize() {
 
 // Run initialization when the extension is installed or updated
 chrome.runtime.onInstalled.addListener(initialize);
+
+// Export functions for testing
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    cosineSimilarity,
+    jaccardSimilarity,
+    generateGroupName,
+    extractKeyphrases,
+  };
+}
