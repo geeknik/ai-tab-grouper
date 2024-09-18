@@ -116,7 +116,7 @@ function extractKeyphrases(text, numPhrases = 5) {
     
     const phrases = [];
     for (let i = 0; i < words.length; i++) {
-        for (let j = i + 1; j <= Math.min(i + 3, words.length); j++) {
+        for (let j = i + 1; j <= Math.min(i + 4, words.length); j++) {
             const phrase = words.slice(i, j).join(' ');
             phrases.push(phrase);
         }
@@ -124,12 +124,12 @@ function extractKeyphrases(text, numPhrases = 5) {
 
     const phraseScores = phrases.map(phrase => {
         const score = phrase.split(' ').length * phrase.split(' ').reduce((sum, word) => sum + words.filter(w => w === word).length, 0);
-        return [phrase, score];
+        return [phrase, score, phrase.length];
     });
 
-    // Sort phrases by score (descending) and then by length (descending)
+    // Sort phrases by score (descending), then by length (descending), and finally alphabetically
     return phraseScores
-        .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+        .sort((a, b) => b[1] - a[1] || b[2] - a[2] || a[0].localeCompare(b[0]))
         .slice(0, numPhrases)
         .map(entry => entry[0]);
 }
