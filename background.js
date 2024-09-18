@@ -127,8 +127,9 @@ function extractKeyphrases(text, numPhrases = 5) {
         return [phrase, score];
     });
 
+    // Sort phrases by score (descending) and then by length (ascending)
     return phraseScores
-        .sort((a, b) => b[1] - a[1])
+        .sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)
         .slice(0, numPhrases)
         .map(entry => entry[0]);
 }
