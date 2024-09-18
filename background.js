@@ -116,7 +116,7 @@ function extractKeyphrases(text, numPhrases = 5) {
     const phrases = [];
     let currentPhrase = [];
 
-    words.forEach(word => {
+    for (const word of words) {
         if (stopWords.has(word)) {
             if (currentPhrase.length > 0) {
                 phrases.push(currentPhrase.join(' '));
@@ -125,20 +125,20 @@ function extractKeyphrases(text, numPhrases = 5) {
         } else {
             currentPhrase.push(word);
         }
-    });
+    }
 
     if (currentPhrase.length > 0) {
         phrases.push(currentPhrase.join(' '));
     }
 
     const wordScores = {};
-    words.forEach(word => {
+    for (const word of words) {
         wordScores[word] = (wordScores[word] || 0) + 1;
-    });
+    }
 
     const phraseScores = phrases.map(phrase => {
-        const words = phrase.split(' ');
-        const score = words.reduce((sum, word) => sum + wordScores[word], 0) / words.length;
+        const phraseWords = phrase.split(' ');
+        const score = phraseWords.reduce((sum, word) => sum + wordScores[word], 0) / phraseWords.length;
         return [phrase, score];
     });
 
@@ -155,18 +155,18 @@ function updateKeyphrases(newDocument, docId) {
 
 // Function to get cosine similarity between two documents
 function cosineSimilarity(doc1, doc2) {
-    const commonTerms = new Set([...Object.keys(doc1), ...Object.keys(doc2)]);
+    const terms = new Set([...Object.keys(doc1), ...Object.keys(doc2)]);
     let dotProduct = 0;
     let magnitude1 = 0;
     let magnitude2 = 0;
 
-    commonTerms.forEach(term => {
+    for (const term of terms) {
         const val1 = doc1[term] || 0;
         const val2 = doc2[term] || 0;
         dotProduct += val1 * val2;
         magnitude1 += val1 * val1;
         magnitude2 += val2 * val2;
-    });
+    }
 
     magnitude1 = Math.sqrt(magnitude1);
     magnitude2 = Math.sqrt(magnitude2);
