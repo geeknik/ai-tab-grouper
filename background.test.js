@@ -4,6 +4,36 @@ global.chrome = {
     sync: {
       get: jest.fn(),
     },
+    local: {
+      get: jest.fn(),
+      set: jest.fn(),
+    },
+  },
+  tabs: {
+    query: jest.fn(),
+    group: jest.fn(),
+    onUpdated: {
+      addListener: jest.fn(),
+    },
+    onRemoved: {
+      addListener: jest.fn(),
+    },
+  },
+  tabGroups: {
+    update: jest.fn(),
+  },
+  alarms: {
+    onAlarm: {
+      addListener: jest.fn(),
+    },
+  },
+  runtime: {
+    onMessage: {
+      addListener: jest.fn(),
+    },
+    onInstalled: {
+      addListener: jest.fn(),
+    },
   },
 };
 

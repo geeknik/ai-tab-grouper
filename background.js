@@ -415,43 +415,48 @@ async function loadState() {
 }
 
 // Listen for tab updates
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && isGroupableTab(tab)) {
-        const features = `${tab.url} ${tab.title}`;
-        if (settings.groupingAlgorithm === 'tfidf') {
-            updateTFIDF(features, tabId.toString());
-        } else if (settings.groupingAlgorithm === 'bm25') {
-            updateBM25(features, tabId.toString());
-        } else if (settings.groupingAlgorithm === 'keyphrase') {
-            updateKeyphrases(features, tabId.toString());
+if (typeof chrome !== 'undefined' && chrome.tabs) {
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        if (changeInfo.status === 'complete' && isGroupableTab(tab)) {
+            const features = `${tab.url} ${tab.title}`;
+            if (settings.groupingAlgorithm === 'tfidf') {
+                updateTFIDF(features, tabId.toString());
+            } else if (settings.groupingAlgorithm === 'bm25') {
+                updateBM25(features, tabId.toString());
+            } else if (settings.groupingAlgorithm === 'keyphrase') {
+                updateKeyphrases(features, tabId.toString());
+            }
+            groupTabs();
         }
-        groupTabs();
-    }
-});
+    });
 
-// Listen for tab removal
-chrome.tabs.onRemoved.addListener((tabId) => {
-    delete tfidf[tabId.toString()];
-    delete bm25[tabId.toString()];
-    delete keyphrases[tabId.toString()];
-    groupTabs();
-});
-
-// Listen for alarms
-chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === 'groupTabs') {
+    // Listen for tab removal
+    chrome.tabs.onRemoved.addListener((tabId) => {
+        delete tfidf[tabId.toString()];
+        delete bm25[tabId.toString()];
+        delete keyphrases[tabId.toString()];
         groupTabs();
-    }
-});
+    });
 
-// Listen for settings updates
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'updateSettings') {
-        loadSettings();
-    } else if (request.action === 'groupTabs') {
-        groupTabs();
-    }
-});
+    // Listen for alarms
+    chrome.alarms.onAlarm.addListener((alarm) => {
+        if (alarm.name === 'groupTabs') {
+            groupTabs();
+        }
+    });
+
+    // Listen for settings updates
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'updateSettings') {
+            loadSettings();
+        } else if (request.action === 'groupTabs') {
+            groupTabs();
+        }
+    });
+
+    // Run initialization when the extension is installed or updated
+    chrome.runtime.onInstalled.addListener(initialize);
+}
 
 // Initial setup
 async function initialize() {
@@ -463,9 +468,6 @@ async function initialize() {
         console.error('Initialization error:', error);
     }
 }
-
-// Run initialization when the extension is installed or updated
-chrome.runtime.onInstalled.addListener(initialize);
 
 // Export functions for testing
 if (typeof module !== 'undefined' && module.exports) {
