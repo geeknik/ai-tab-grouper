@@ -1,6 +1,6 @@
 # Privacy Policy for AI Tab Grouper
 
-Last updated: 17 September 2024
+Last updated: 18 September 2024
 
 ## Introduction
 
@@ -11,7 +11,7 @@ AI Tab Grouper is committed to protecting your privacy. This Privacy Policy expl
 AI Tab Grouper operates entirely within your browser and does not collect, transmit, or store any personal information on external servers. The extension processes the following data locally on your device:
 
 1. Tab URLs and titles: Used for grouping related tabs
-2. TF-IDF model data: Stored locally to maintain grouping intelligence across browser sessions
+2. TF-IDF, BM25, and Keyphrase Extraction model data: Stored locally to maintain grouping intelligence across browser sessions
 
 This information is used solely for the purpose of grouping your tabs and is never transmitted off your device.
 
