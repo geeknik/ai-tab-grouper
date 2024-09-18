@@ -2,6 +2,8 @@
 
 AI Tab Grouper is a Brave extension that automatically organizes your tabs into groups using AI-powered text analysis algorithms.
 
+![CleanShot 2024-09-18 at 11 34 26@2x](https://github.com/user-attachments/assets/462b125e-55a8-477b-b0b1-7064f369d7bb)
+
 ## Features
 
 - Automatically groups related tabs using advanced text analysis
@@ -46,6 +48,9 @@ In the options page, you can customize:
 - BM25 Parameters (k1 and b): Fine-tune the BM25 algorithm if selected
 
 To access the settings, right-click the extension icon and select "Options", or use the "Open Settings" button in the popup.
+
+![CleanShot 2024-09-18 at 11 35 11@2x](https://github.com/user-attachments/assets/e093775f-0e2d-4a45-b37b-4936e0b4aa2f)
+
 
 ## Algorithms
 
