@@ -20,7 +20,7 @@ This information is used solely for the purpose of grouping your tabs and is nev
 The extension uses Chrome's local storage API to save:
 
 1. User preferences (e.g., similarity threshold, grouping interval)
-2. TF-IDF model data
+2. TF-IDF, BM25, and Keyphrase Extraction model data
 
 This data is stored locally on your device and is not accessible to other extensions or websites.
 
@@ -34,7 +34,7 @@ AI Tab Grouper does not share any information with third parties. All operations
 
 ## User Rights
 
-As all data is stored locally on your device, you have full control over your data. You can clear the extension's stored data at any time through Chrome's extension management interface.
+As all data is stored locally on your device, you have full control over your data. You can clear the extension's stored data at any time by uninstalling the extension through Brave's extension management interface.
 
 ## Changes to This Policy
 
