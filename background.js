@@ -113,32 +113,19 @@ function updateBM25(newDocument, docId) {
 function extractKeyphrases(text, numPhrases = 5) {
     const stopWords = new Set(['the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']);
     const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(word => word.length > 1 && !stopWords.has(word));
+    
     const phrases = [];
-    let currentPhrase = [];
-
-    for (const word of words) {
-        if (stopWords.has(word)) {
-            if (currentPhrase.length > 0) {
-                phrases.push(currentPhrase.join(' '));
-                currentPhrase = [];
+    for (let i = 0; i < words.length; i++) {
+        for (let j = i + 1; j <= words.length; j++) {
+            const phrase = words.slice(i, j).join(' ');
+            if (phrase.split(' ').length <= 3) {  // Limit phrase length to 3 words
+                phrases.push(phrase);
             }
-        } else {
-            currentPhrase.push(word);
         }
     }
 
-    if (currentPhrase.length > 0) {
-        phrases.push(currentPhrase.join(' '));
-    }
-
-    const wordScores = {};
-    for (const word of words) {
-        wordScores[word] = (wordScores[word] || 0) + 1;
-    }
-
     const phraseScores = phrases.map(phrase => {
-        const phraseWords = phrase.split(' ');
-        const score = phraseWords.reduce((sum, word) => sum + wordScores[word], 0) / phraseWords.length;
+        const score = phrase.split(' ').length * phrase.split(' ').reduce((sum, word) => sum + words.filter(w => w === word).length, 0);
         return [phrase, score];
     });
 

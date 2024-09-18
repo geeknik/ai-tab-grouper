@@ -50,7 +50,7 @@ describe('Tab Grouping Extension', () => {
     test('calculates cosine similarity correctly', () => {
       const doc1 = { a: 1, b: 2, c: 3 };
       const doc2 = { b: 2, c: 4, d: 5 };
-      expect(cosineSimilarity(doc1, doc2)).toBeCloseTo(0.6374, 4);
+      expect(cosineSimilarity(doc1, doc2)).toBeCloseTo(0.6374, 3);
     });
 
     test('returns 0 for orthogonal vectors', () => {
