@@ -42,8 +42,8 @@ We may update this privacy policy from time to time. We will notify you of any c
 
 ## Contact Us
 
-If you have any questions about this Privacy Policy, please open an issue in our GitHub repository.
+If you have any questions about this Privacy Policy, please [open an issue](https://github.com/geeknik/ai-tab-grouper/issues/new/choose) in this GitHub repository.
 
 ## Consent
 
-By using AI Tab Grouper, you consent to this Privacy Policy.
+By using AI Tab Grouper, you consent to this Privacy Policy. Have a nice day!
