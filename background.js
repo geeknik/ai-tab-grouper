@@ -11,7 +11,7 @@
         similarityThreshold: 0.3,
         groupingInterval: 5,
         maxGroupNameLength: 15,
-        groupingAlgorithm: 'tfidf', // 'tfidf', 'bm25', 'keyphrase', or 'hac'
+        groupingAlgorithm: 'tfidf', // 'tfidf', 'bm25', 'keyphrase', 'hac', or 'lsa'
         bm25k1: 1.5,
         bm25b: 0.75,
     };
@@ -362,6 +362,10 @@
                                 case 'keyphrase':
                                     updateKeyphrases(features, tabId);
                                     tabVectors[tabId] = keyphrases[tabId];
+                                    break;
+                                case 'lsa':
+                                    updateLSA(features, tabId);
+                                    tabVectors[tabId] = lsaVectors[tabId];
                                     break;
                                 default:
                                     throw new Error(`Unknown grouping algorithm: ${settings.groupingAlgorithm}`);
