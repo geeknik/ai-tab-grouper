@@ -11,6 +11,16 @@ function saveSettings() {
 
     chrome.storage.sync.set(settings, function() {
         console.log('Settings saved');
+        // Show a brief confirmation message
+        const saveButton = document.getElementById('saveSettings');
+        const originalText = saveButton.textContent;
+        saveButton.textContent = 'Settings Saved!';
+        saveButton.style.backgroundColor = '#2E7D32';
+        setTimeout(() => {
+            saveButton.textContent = originalText;
+            saveButton.style.backgroundColor = '#4CAF50';
+        }, 2000);
+        
         // Notify the background script to update its settings
         chrome.runtime.sendMessage({action: 'updateSettings'});
     });
@@ -34,7 +44,10 @@ function loadSettings() {
         document.getElementById('maxGroupNameLength').value = items.maxGroupNameLength;
         document.getElementById('bm25k1').value = items.bm25k1;
         document.getElementById('bm25b').value = items.bm25b;
+        
+        // Update UI based on loaded settings
         toggleBM25Settings();
+        showAlgorithmDescription(items.groupingAlgorithm);
     });
 }
 
@@ -48,10 +61,30 @@ function toggleBM25Settings() {
     }
 }
 
+// Function to show the description for the selected algorithm
+function showAlgorithmDescription(algorithm) {
+    // Hide all descriptions first
+    const descriptions = document.querySelectorAll('.algorithm-description');
+    descriptions.forEach(desc => {
+        desc.style.display = 'none';
+    });
+    
+    // Show the selected algorithm's description
+    const selectedDesc = document.getElementById(`${algorithm}-description`);
+    if (selectedDesc) {
+        selectedDesc.style.display = 'block';
+    }
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', loadSettings);
 document.getElementById('saveSettings').addEventListener('click', saveSettings);
 document.getElementById('similarityThreshold').addEventListener('input', function() {
     document.getElementById('similarityThresholdValue').textContent = this.value;
 });
-document.getElementById('groupingAlgorithm').addEventListener('change', toggleBM25Settings);
+
+// Update UI when algorithm changes
+document.getElementById('groupingAlgorithm').addEventListener('change', function() {
+    toggleBM25Settings();
+    showAlgorithmDescription(this.value);
+});

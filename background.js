@@ -39,31 +39,65 @@
 
     // Function to check if a tab should be considered for grouping
     function isGroupableTab(tab) {
-        return !tab.pinned && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://');
+        // First and foremost, always ignore pinned tabs
+        if (tab.pinned) {
+            return false;
+        }
+        
+        // Ignore browser-specific pages and extension pages
+        if (tab.url.startsWith('chrome://') || 
+            tab.url.startsWith('brave://') || 
+            tab.url.startsWith('chrome-extension://') ||
+            tab.url.startsWith('about:') ||
+            tab.url.startsWith('edge://') ||
+            tab.url.startsWith('opera://')) {
+            return false;
+        }
+        
+        // Ignore empty tabs or tabs with invalid URLs
+        if (!tab.url || tab.url === '' || tab.url === 'about:blank') {
+            return false;
+        }
+        
+        return true;
     }
 
     // Function to calculate TF-IDF incrementally
     function updateTFIDF(newDocument, docId) {
-        const terms = newDocument.split(/\W+/).filter(term => term.length > 2);
+        // Tokenize the document with improved preprocessing
+        const terms = newDocument.toLowerCase()
+            .split(/\W+/)
+            .filter(term => term.length > 2 && !isStopWord(term));
+        
         const termFreq = {};
         const docLength = terms.length;
+        
+        // Skip processing if document is too short
+        if (docLength < 3) {
+            console.log(`Document ${docId} is too short for meaningful TF-IDF analysis`);
+            tfidf[docId] = {};
+            return;
+        }
+        
+        // Calculate term frequencies
         terms.forEach(term => {
-            term = term.toLowerCase();
             termFreq[term] = (termFreq[term] || 0) + 1;
             vocabulary.add(term);
         });
 
-        // Calculate TF with length normalization
+        // Calculate TF with length normalization and log scaling for better weighting
         Object.keys(termFreq).forEach(term => {
-            termFreq[term] = termFreq[term] / docLength;
+            // Log normalization: 1 + log(tf) to reduce the effect of high-frequency terms
+            termFreq[term] = 1 + Math.log(termFreq[term]);
         });
 
         tfidf[docId] = termFreq;
 
-        // Update IDF
+        // Update IDF with smoothing to handle rare terms better
         vocabulary.forEach(term => {
             const docCount = Object.values(tfidf).filter(doc => doc[term]).length;
-            idf[term] = Math.log((Object.keys(tfidf).length + 1) / (docCount + 1)) + 1;
+            // Smoothed IDF formula with log base 10 for more intuitive scaling
+            idf[term] = Math.log10((Object.keys(tfidf).length + 1) / (docCount + 0.5)) + 1;
         });
 
         // Update TF-IDF scores
@@ -74,92 +108,188 @@
         });
     }
 
+    // Helper function to check if a word is a stop word
+    function isStopWord(word) {
+        const stopWords = new Set([
+            'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+            'is', 'this', 'about', 'that', 'and', 'or', 'but', 'from', 'as', 'it',
+            'are', 'was', 'be', 'being', 'been', 'has', 'have', 'had', 'do', 'does', 'did',
+            'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can',
+            'you', 'your', 'yours', 'we', 'our', 'ours', 'they', 'their', 'theirs',
+            'he', 'his', 'him', 'she', 'her', 'hers', 'its', 'my', 'mine', 'i', 'me',
+            'who', 'whom', 'whose', 'which', 'what', 'where', 'when', 'why', 'how'
+        ]);
+        return stopWords.has(word);
+    }
+
     // Function to calculate BM25 incrementally
     function updateBM25(newDocument, docId) {
-        const terms = newDocument.split(/\W+/);
+        // Tokenize with improved preprocessing
+        const terms = newDocument.toLowerCase()
+            .split(/\W+/)
+            .filter(term => term.length > 2 && !isStopWord(term));
+        
         const termFreq = {};
-        let docLength = 0;
+        let docLength = terms.length;
+        
+        // Skip processing if document is too short
+        if (docLength < 3) {
+            console.log(`Document ${docId} is too short for meaningful BM25 analysis`);
+            bm25[docId] = { termFreq: {}, docLength: 0 };
+            return;
+        }
+        
+        // Calculate term frequencies
         terms.forEach(term => {
-            term = term.toLowerCase();
             termFreq[term] = (termFreq[term] || 0) + 1;
-            docLength++;
             vocabulary.add(term);
         });
+        
         bm25[docId] = { termFreq, docLength };
 
-        // Update IDF (same as in TF-IDF)
+        // Update IDF with BM25-specific formula
         vocabulary.forEach(term => {
+            // Number of documents containing this term
             const docCount = Object.values(bm25).filter(doc => doc.termFreq[term]).length;
+            // BM25 specific IDF formula with smoothing
             idf[term] = Math.log((Object.keys(bm25).length - docCount + 0.5) / (docCount + 0.5) + 1);
         });
 
-        // Calculate average document length
-        const avgDocLength = Object.values(bm25).reduce((sum, doc) => sum + doc.docLength, 0) / Object.keys(bm25).length;
+        // Calculate average document length - important for BM25's length normalization
+        const totalDocs = Object.keys(bm25).length;
+        const totalLength = Object.values(bm25).reduce((sum, doc) => sum + doc.docLength, 0);
+        const avgDocLength = totalLength / totalDocs;
 
         // Update BM25 scores with document length normalization
         Object.keys(bm25).forEach(id => {
             const doc = bm25[id];
+            // Skip empty documents
+            if (doc.docLength === 0) return;
+            
+            // BM25 normalization factor based on document length
             const normalizationFactor = 1 - settings.bm25b + settings.bm25b * (doc.docLength / avgDocLength);
+            
             Object.keys(doc.termFreq).forEach(term => {
                 const tf = doc.termFreq[term];
+                // BM25 term frequency saturation formula
                 const numerator = tf * (settings.bm25k1 + 1);
                 const denominator = tf + settings.bm25k1 * normalizationFactor;
+                // Final BM25 score for this term in this document
                 bm25[id].termFreq[term] = idf[term] * (numerator / denominator);
             });
         });
     }
 
-    // RAKE (Rapid Automatic Keyword Extraction) implementation
+    // Enhanced RAKE (Rapid Automatic Keyword Extraction) implementation
     function extractKeyphrases(text, numPhrases = 5) {
+        // Skip processing if text is too short
+        if (!text || text.length < 20) {
+            console.log("Text too short for meaningful keyphrase extraction");
+            return [];
+        }
+
+        // Expanded stop words list for better phrase boundary detection
         const stopWords = new Set([
             'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
             'is', 'this', 'about', 'that', 'and', 'or', 'but', 'from', 'as', 'it',
-            'are', 'was', 'be', 'being', 'been', 'has', 'have', 'had', 'do', 'does', 'did'
+            'are', 'was', 'be', 'being', 'been', 'has', 'have', 'had', 'do', 'does', 'did',
+            'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can',
+            'you', 'your', 'yours', 'we', 'our', 'ours', 'they', 'their', 'theirs',
+            'he', 'his', 'him', 'she', 'her', 'hers', 'its', 'my', 'mine', 'i', 'me',
+            'who', 'whom', 'whose', 'which', 'what', 'where', 'when', 'why', 'how'
         ]);
-        const sentences = text.toLowerCase().split(/[.!?]/);
+        
+        // Improved sentence splitting with better handling of punctuation
+        const sentences = text.toLowerCase()
+            .replace(/\s+/g, ' ')
+            .split(/[.!?;]+/)
+            .filter(s => s.trim().length > 0);
+        
         const phraseList = [];
 
+        // Extract candidate phrases
         sentences.forEach(sentence => {
-            const words = sentence.split(/\s+/);
+            const words = sentence.trim().split(/\s+/);
             let phrase = [];
+            
             words.forEach(word => {
+                // Clean the word of non-alphanumeric characters
                 word = word.replace(/[^\w]/g, '');
-                if (!stopWords.has(word) && word.length > 0) {
+                
+                // Add word to current phrase if it's not a stop word and has sufficient length
+                if (!stopWords.has(word) && word.length > 1) {
                     phrase.push(word);
                 } else if (phrase.length > 0) {
-                    phraseList.push(phrase);
+                    // End of a phrase
+                    if (phrase.length >= 1 && phrase.length <= 5) {
+                        // Only keep phrases of reasonable length (1-5 words)
+                        phraseList.push(phrase);
+                    }
                     phrase = [];
                 }
             });
-            if (phrase.length > 0) {
+            
+            // Add the last phrase if it exists
+            if (phrase.length >= 1 && phrase.length <= 5) {
                 phraseList.push(phrase);
             }
         });
 
+        // Skip further processing if no phrases were found
+        if (phraseList.length === 0) {
+            return [];
+        }
+
+        // Calculate word statistics
         const wordFreq = {};
         const wordDegree = {};
 
         phraseList.forEach(phrase => {
+            // Degree is based on phrase length - longer phrases give higher degree
             const degree = phrase.length - 1;
+            
             phrase.forEach(word => {
                 wordFreq[word] = (wordFreq[word] || 0) + 1;
                 wordDegree[word] = (wordDegree[word] || 0) + degree;
             });
         });
 
+        // Calculate word scores using the RAKE formula
         const wordScore = {};
         for (const word in wordFreq) {
+            // RAKE score: word degree + word frequency / word frequency
             wordScore[word] = (wordDegree[word] + wordFreq[word]) / wordFreq[word];
         }
 
+        // Score phrases by summing the scores of their constituent words
         const phraseScores = phraseList.map(phrase => {
             const score = phrase.reduce((sum, word) => sum + wordScore[word], 0);
-            return [phrase.join(' '), score];
+            return [phrase.join(' '), score, phrase.length];
         });
 
-        phraseScores.sort((a, b) => b[1] - a[1]);
+        // Sort by score and then prefer shorter phrases when scores are close
+        phraseScores.sort((a, b) => {
+            const scoreDiff = b[1] - a[1];
+            // If scores are very close, prefer the shorter phrase
+            if (Math.abs(scoreDiff) < 0.5) {
+                return a[2] - b[2]; // Sort by length (ascending)
+            }
+            return scoreDiff; // Otherwise sort by score (descending)
+        });
 
-        return phraseScores.slice(0, numPhrases).map(item => item[0]);
+        // Return unique keyphrases
+        const uniquePhrases = new Set();
+        const result = [];
+        
+        for (const [phrase, score] of phraseScores) {
+            if (!uniquePhrases.has(phrase)) {
+                uniquePhrases.add(phrase);
+                result.push(phrase);
+                if (result.length >= numPhrases) break;
+            }
+        }
+        
+        return result;
     }
 
     // Function to update keyphrases
@@ -301,22 +431,93 @@
 
     // Function to generate a group name based on common terms
     function generateGroupName(clusterDocs) {
-        const combinedTerms = clusterDocs.join(' ').toLowerCase().split(/\W+/);
-        const termFreq = {};
-        const stopWords = new Set(['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']);
-
-        combinedTerms.forEach(term => {
-            if (term.length > 3 && !stopWords.has(term)) {
-                termFreq[term] = (termFreq[term] || 0) + 1;
+        // Skip if no documents are provided
+        if (!clusterDocs || clusterDocs.length === 0) {
+            return "Grouped Tabs";
+        }
+        
+        // Expanded stop words list for better name generation
+        const stopWords = new Set([
+            'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+            'is', 'this', 'about', 'that', 'as', 'it', 'from', 'are', 'was', 'be', 'been',
+            'has', 'have', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could',
+            'may', 'might', 'must', 'can', 'you', 'your', 'we', 'our', 'they', 'their',
+            'he', 'his', 'she', 'her', 'its', 'my', 'i', 'me', 'com', 'org', 'net', 'www',
+            'http', 'https', 'html', 'htm', 'php', 'asp', 'jsp', 'xml', 'css', 'js'
+        ]);
+        
+        // Extract domain names for potential use in group naming
+        const domains = [];
+        const urlRegex = /https?:\/\/([^\/]+)/i;
+        
+        for (const doc of clusterDocs) {
+            const match = doc.match(urlRegex);
+            if (match && match[1]) {
+                // Extract domain without www. and .com/.org/etc.
+                let domain = match[1].replace(/^www\./, '').split('.')[0];
+                if (domain && domain.length > 2 && !stopWords.has(domain)) {
+                    domains.push(domain);
+                }
             }
+        }
+        
+        // Process all terms from the documents
+        const combinedTerms = clusterDocs.join(' ')
+            .toLowerCase()
+            .replace(/[^\w\s-]/g, ' ')  // Replace non-word chars with spaces
+            .split(/\s+/)
+            .filter(term => term.length > 3 && !stopWords.has(term));
+        
+        // Count term frequencies
+        const termFreq = {};
+        combinedTerms.forEach(term => {
+            termFreq[term] = (termFreq[term] || 0) + 1;
         });
-
+        
+        // Sort terms by frequency
         const sortedTerms = Object.entries(termFreq)
             .sort((a, b) => b[1] - a[1])
             .filter(([term]) => !term.match(/^\d+$/)); // Remove purely numeric terms
-
-        const topTerms = sortedTerms.slice(0, 3).map(([term]) => term);
-        return topTerms.join('-').substring(0, settings.maxGroupNameLength);
+        
+        // Prioritize domain names if they're common across the cluster
+        const domainFreq = {};
+        domains.forEach(domain => {
+            domainFreq[domain] = (domainFreq[domain] || 0) + 1;
+        });
+        
+        const commonDomains = Object.entries(domainFreq)
+            .filter(([_, count]) => count > 1)
+            .sort((a, b) => b[1] - a[1])
+            .map(([domain]) => domain);
+        
+        // Generate name based on common domains or top terms
+        let groupName = "";
+        
+        if (commonDomains.length > 0) {
+            // Use the most common domain as the primary identifier
+            groupName = commonDomains[0].charAt(0).toUpperCase() + commonDomains[0].slice(1);
+            
+            // Add a descriptive term if available
+            if (sortedTerms.length > 0) {
+                const topTerm = sortedTerms[0][0];
+                // Only add if it's not too similar to the domain
+                if (!commonDomains[0].includes(topTerm) && !topTerm.includes(commonDomains[0])) {
+                    groupName += ": " + topTerm.charAt(0).toUpperCase() + topTerm.slice(1);
+                }
+            }
+        } else if (sortedTerms.length > 0) {
+            // Use top 2 terms if no common domains
+            const topTerms = sortedTerms.slice(0, 2).map(([term]) => 
+                term.charAt(0).toUpperCase() + term.slice(1)
+            );
+            groupName = topTerms.join(" ");
+        } else {
+            // Fallback if no good terms found
+            groupName = "Grouped Tabs";
+        }
+        
+        // Ensure the name isn't too long
+        return groupName.substring(0, settings.maxGroupNameLength);
     }
 
     // Function to extract features from a tab

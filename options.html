@@ -12,12 +12,27 @@
             padding: 20px;
             max-width: 800px;
             margin: 0 auto;
+            color: #333;
         }
         h1 {
             color: #333;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
         }
         .setting {
             margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .setting-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .setting-description {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
         }
         label {
             display: block;
@@ -31,7 +46,9 @@
         }
         select {
             width: 100%;
-            padding: 5px;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
         }
         button {
             background-color: #4CAF50;
@@ -44,6 +61,24 @@
             font-size: 16px;
             margin: 4px 2px;
             cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .algorithm-description {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e9f7ef;
+            border-left: 4px solid #4CAF50;
+            display: none;
+        }
+        footer {
+            margin-top: 30px;
+            font-size: 0.8em;
+            color: #777;
+            text-align: center;
         }
     </style>
 </head>
@@ -51,42 +86,71 @@
     <h1>AI Tab Grouper Settings</h1>
     
     <div class="setting">
-        <label for="groupingAlgorithm">Grouping Algorithm:</label>
+        <div class="setting-title">Grouping Algorithm</div>
+        <div class="setting-description">Choose the algorithm that determines how tabs are grouped together.</div>
         <select id="groupingAlgorithm">
-            <option value="tfidf">TF-IDF</option>
-            <option value="bm25">BM25</option>
-            <option value="keyphrase">Keyphrase Extraction</option>
+            <option value="tfidf">TF-IDF (General Purpose)</option>
+            <option value="bm25">BM25 (Content-Focused)</option>
+            <option value="keyphrase">Keyphrase Extraction (Topic-Based)</option>
         </select>
+        
+        <div id="tfidf-description" class="algorithm-description">
+            <strong>TF-IDF (Term Frequency-Inverse Document Frequency)</strong>
+            <p>Best for: General purpose grouping with balanced performance.</p>
+            <p>This algorithm identifies important words across your tabs by analyzing how frequently they appear. It works well for most websites and creates intuitive groups based on common terminology. Choose this if you want reliable, consistent grouping behavior.</p>
+        </div>
+        
+        <div id="bm25-description" class="algorithm-description">
+            <strong>BM25 (Best Matching 25)</strong>
+            <p>Best for: Content-heavy websites with varying lengths.</p>
+            <p>An advanced algorithm that excels at handling tabs with different amounts of text. It's particularly effective for research, documentation, and article-heavy browsing. Choose this if you frequently have tabs with substantial text content of varying lengths.</p>
+        </div>
+        
+        <div id="keyphrase-description" class="algorithm-description">
+            <strong>Keyphrase Extraction</strong>
+            <p>Best for: Topic-focused grouping across diverse websites.</p>
+            <p>This algorithm identifies key phrases and topics rather than just individual words. It's excellent for grouping tabs by subject matter even when the exact terminology differs. Choose this if you want groups organized by conceptual topics rather than specific terminology.</p>
+        </div>
     </div>
     
     <div class="setting">
-        <label for="similarityThreshold">Similarity Threshold:</label>
+        <div class="setting-title">Similarity Threshold</div>
+        <div class="setting-description">How similar tabs need to be to be grouped together. Higher values create more groups with fewer tabs in each.</div>
         <input type="range" id="similarityThreshold" min="0" max="1" step="0.05" value="0.3">
         <span id="similarityThresholdValue">0.3</span>
     </div>
     
     <div class="setting">
-        <label for="groupingInterval">Automatic Grouping Interval (minutes):</label>
+        <div class="setting-title">Automatic Grouping Interval</div>
+        <div class="setting-description">How often (in minutes) tabs should be automatically grouped.</div>
         <input type="number" id="groupingInterval" min="1" value="5">
     </div>
     
     <div class="setting">
-        <label for="maxGroupNameLength">Maximum Group Name Length:</label>
+        <div class="setting-title">Maximum Group Name Length</div>
+        <div class="setting-description">The maximum length of automatically generated group names.</div>
         <input type="number" id="maxGroupNameLength" min="1" max="20" value="15">
     </div>
     
     <div id="bm25Settings" style="display: none;">
         <div class="setting">
-            <label for="bm25k1">BM25 k1 Parameter:</label>
+            <div class="setting-title">BM25 k1 Parameter</div>
+            <div class="setting-description">Controls term frequency saturation. Higher values give more weight to term frequency.</div>
             <input type="number" id="bm25k1" min="0.1" max="3" step="0.1" value="1.5">
         </div>
         <div class="setting">
-            <label for="bm25b">BM25 b Parameter:</label>
+            <div class="setting-title">BM25 b Parameter</div>
+            <div class="setting-description">Controls document length normalization. Higher values give more normalization.</div>
             <input type="number" id="bm25b" min="0" max="1" step="0.05" value="0.75">
         </div>
     </div>
     
     <button id="saveSettings">Save Settings</button>
+
+    <footer>
+        <p>AI Tab Grouper respects your privacy. All processing happens locally in your browser.</p>
+        <p>Pinned tabs are always ignored and will never be grouped.</p>
+    </footer>
 
     <script src="options.js"></script>
 </body>
