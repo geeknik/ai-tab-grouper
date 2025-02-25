@@ -20,6 +20,7 @@ function saveSettings() {
 function loadSettings() {
     chrome.storage.sync.get({
         groupingAlgorithm: 'tfidf',
+        lsaDimensions: 100,
         similarityThreshold: 0.3,
         groupingInterval: 5,
         maxGroupNameLength: 15,
