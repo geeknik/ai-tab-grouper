@@ -11,6 +11,7 @@ AI Tab Grouper is a Brave extension that automatically organizes your tabs into 
   - TF-IDF (Term Frequency-Inverse Document Frequency)
   - BM25 (Best Matching 25)
   - Keyphrase Extraction
+  - LSA (Latent Semantic Analysis)
 - Customizable settings for grouping behavior
 - Ignores pinned tabs, ensuring they remain untouched
 - Periodic automatic grouping with adjustable intervals
@@ -41,11 +42,12 @@ Pinned tabs are always ignored by the extension. They will not be unpinned or in
 
 In the options page, you can customize:
 
-- Grouping Algorithm: Choose between TF-IDF, BM25, or Keyphrase Extraction
+- Grouping Algorithm: Choose between TF-IDF, BM25, Keyphrase Extraction, or LSA
 - Similarity Threshold: Adjust how similar tabs need to be to be grouped together
 - Automatic Grouping Interval: Set how often the extension should attempt to group tabs
 - Maximum Group Name Length: Limit the length of automatically generated group names
 - BM25 Parameters (k1 and b): Fine-tune the BM25 algorithm if selected
+- LSA Dimensions: Adjust the number of dimensions used for semantic analysis when using LSA
 
 To access the settings, right-click the extension icon and select "Options", or use the "Open Settings" button in the popup.
 
@@ -62,6 +64,46 @@ An advanced ranking function used by search engines. It can provide more nuanced
 
 ### Keyphrase Extraction
 Identifies the most important phrases in the tab content, which can be effective for grouping tabs with similar key topics.
+
+### LSA (Latent Semantic Analysis)
+Discovers hidden semantic relationships between tabs by analyzing the underlying structure of the content. It can identify conceptual similarities even when tabs don't share the exact same keywords.
+
+## Tips for Optimal Tab Grouping
+
+Here are some pre-defined settings configurations for different use cases:
+
+### Research Mode
+- **Algorithm**: LSA
+- **Similarity Threshold**: 0.25
+- **LSA Dimensions**: 50
+- **Best for**: Academic research, deep dives into related topics
+- **Why**: LSA excels at finding conceptual relationships between tabs even when they use different terminology. The lower similarity threshold ensures related research materials are grouped together.
+
+### Work/Project Focus
+- **Algorithm**: BM25
+- **Similarity Threshold**: 0.4
+- **BM25 k1**: 1.8
+- **BM25 b**: 0.8
+- **Best for**: Professional work with multiple projects open simultaneously
+- **Why**: BM25 handles varying document lengths well, making it ideal for separating different work projects. The higher similarity threshold creates more distinct groups.
+
+### News Reading
+- **Algorithm**: Keyphrase Extraction
+- **Similarity Threshold**: 0.35
+- **Best for**: Reading news from multiple sources on various topics
+- **Why**: Keyphrase extraction identifies the main topics regardless of writing style, helping group news articles by subject matter rather than source.
+
+### General Browsing
+- **Algorithm**: TF-IDF
+- **Similarity Threshold**: 0.3
+- **Best for**: Everyday browsing with mixed content
+- **Why**: TF-IDF provides a good balance of performance and accuracy for general use, with a moderate threshold that creates intuitive groups.
+
+### Shopping Comparison
+- **Algorithm**: Keyphrase Extraction
+- **Similarity Threshold**: 0.45
+- **Best for**: Comparing products across different stores
+- **Why**: The higher threshold ensures only very similar products are grouped together, while keyphrase extraction focuses on product attributes rather than store-specific language.
 
 ## Privacy
 
