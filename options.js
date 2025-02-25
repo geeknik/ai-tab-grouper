@@ -6,7 +6,8 @@ function saveSettings() {
         groupingInterval: parseInt(document.getElementById('groupingInterval').value),
         maxGroupNameLength: parseInt(document.getElementById('maxGroupNameLength').value),
         bm25k1: parseFloat(document.getElementById('bm25k1').value),
-        bm25b: parseFloat(document.getElementById('bm25b').value)
+        bm25b: parseFloat(document.getElementById('bm25b').value),
+        lsaDimensions: parseInt(document.getElementById('lsaDimensions').value || 50)
     };
 
     chrome.storage.sync.set(settings, function() {
@@ -30,12 +31,12 @@ function saveSettings() {
 function loadSettings() {
     chrome.storage.sync.get({
         groupingAlgorithm: 'tfidf',
-        lsaDimensions: 100,
         similarityThreshold: 0.3,
         groupingInterval: 5,
         maxGroupNameLength: 15,
         bm25k1: 1.5,
-        bm25b: 0.75
+        bm25b: 0.75,
+        lsaDimensions: 50
     }, function(items) {
         document.getElementById('groupingAlgorithm').value = items.groupingAlgorithm;
         document.getElementById('similarityThreshold').value = items.similarityThreshold;
@@ -44,20 +45,27 @@ function loadSettings() {
         document.getElementById('maxGroupNameLength').value = items.maxGroupNameLength;
         document.getElementById('bm25k1').value = items.bm25k1;
         document.getElementById('bm25b').value = items.bm25b;
+        document.getElementById('lsaDimensions').value = items.lsaDimensions;
         
         // Update UI based on loaded settings
-        toggleBM25Settings();
+        toggleAlgorithmSettings();
         showAlgorithmDescription(items.groupingAlgorithm);
     });
 }
 
-// Function to toggle BM25 settings visibility
-function toggleBM25Settings() {
-    const bm25Settings = document.getElementById('bm25Settings');
-    if (document.getElementById('groupingAlgorithm').value === 'bm25') {
-        bm25Settings.style.display = 'block';
-    } else {
-        bm25Settings.style.display = 'none';
+// Function to toggle algorithm-specific settings visibility
+function toggleAlgorithmSettings() {
+    const algorithm = document.getElementById('groupingAlgorithm').value;
+    
+    // Hide all algorithm-specific settings first
+    document.getElementById('bm25Settings').style.display = 'none';
+    document.getElementById('lsaSettings').style.display = 'none';
+    
+    // Show settings for the selected algorithm
+    if (algorithm === 'bm25') {
+        document.getElementById('bm25Settings').style.display = 'block';
+    } else if (algorithm === 'lsa') {
+        document.getElementById('lsaSettings').style.display = 'block';
     }
 }
 
@@ -85,6 +93,6 @@ document.getElementById('similarityThreshold').addEventListener('input', functio
 
 // Update UI when algorithm changes
 document.getElementById('groupingAlgorithm').addEventListener('change', function() {
-    toggleBM25Settings();
+    toggleAlgorithmSettings();
     showAlgorithmDescription(this.value);
 });

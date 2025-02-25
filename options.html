@@ -92,6 +92,7 @@
             <option value="tfidf">TF-IDF (General Purpose)</option>
             <option value="bm25">BM25 (Content-Focused)</option>
             <option value="keyphrase">Keyphrase Extraction (Topic-Based)</option>
+            <option value="lsa">LSA (Semantic Relationships)</option>
         </select>
         
         <div id="tfidf-description" class="algorithm-description">
@@ -110,6 +111,12 @@
             <strong>Keyphrase Extraction</strong>
             <p>Best for: Topic-focused grouping across diverse websites.</p>
             <p>This algorithm identifies key phrases and topics rather than just individual words. It's excellent for grouping tabs by subject matter even when the exact terminology differs. Choose this if you want groups organized by conceptual topics rather than specific terminology.</p>
+        </div>
+        
+        <div id="lsa-description" class="algorithm-description">
+            <strong>LSA (Latent Semantic Analysis)</strong>
+            <p>Best for: Discovering hidden relationships between tabs.</p>
+            <p>This advanced algorithm uses mathematical techniques to identify the underlying semantic structure in your tabs. It can discover relationships between tabs even when they don't share the same exact words. Choose this if you want to group tabs based on conceptual similarity rather than just keyword matching.</p>
         </div>
     </div>
     
@@ -142,6 +149,14 @@
             <div class="setting-title">BM25 b Parameter</div>
             <div class="setting-description">Controls document length normalization. Higher values give more normalization.</div>
             <input type="number" id="bm25b" min="0" max="1" step="0.05" value="0.75">
+        </div>
+    </div>
+    
+    <div id="lsaSettings" style="display: none;">
+        <div class="setting">
+            <div class="setting-title">LSA Dimensions</div>
+            <div class="setting-description">Number of dimensions to use for semantic analysis. Higher values capture more nuanced relationships but require more processing.</div>
+            <input type="number" id="lsaDimensions" min="10" max="100" step="5" value="50">
         </div>
     </div>
     

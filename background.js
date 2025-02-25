@@ -5,6 +5,9 @@
     let vocabulary = new Set();
     let bm25 = {};
     let keyphrases = {};
+    let lsaVectors = {};
+    let lsaTermMatrix = [];
+    let lsaTerms = [];
 
     // Settings
     let settings = {
@@ -14,6 +17,7 @@
         groupingAlgorithm: 'tfidf', // 'tfidf', 'bm25', 'keyphrase', 'hac', or 'lsa'
         bm25k1: 1.5,
         bm25b: 0.75,
+        lsaDimensions: 50, // Number of dimensions to use for LSA
     };
 
     // Load settings
@@ -25,6 +29,7 @@
             groupingAlgorithm: 'tfidf',
             bm25k1: 1.5,
             bm25b: 0.75,
+            lsaDimensions: 50,
         });
         settings = items;
         resetAlarm();
@@ -612,7 +617,10 @@
                 bm25: bm25,
                 keyphrases: keyphrases,
                 idf: idf,
-                vocabulary: Array.from(vocabulary)
+                vocabulary: Array.from(vocabulary),
+                lsaVectors: lsaVectors,
+                lsaTermMatrix: lsaTermMatrix,
+                lsaTerms: lsaTerms
             });
         } catch (error) {
             console.error('Error saving state:', error);
@@ -622,12 +630,15 @@
     // Function to load the saved state
     async function loadState() {
         try {
-            const state = await chrome.storage.local.get(['tfidf', 'bm25', 'keyphrases', 'idf', 'vocabulary']);
+            const state = await chrome.storage.local.get(['tfidf', 'bm25', 'keyphrases', 'idf', 'vocabulary', 'lsaVectors', 'lsaTermMatrix', 'lsaTerms']);
             if (state.tfidf) tfidf = state.tfidf;
             if (state.bm25) bm25 = state.bm25;
             if (state.keyphrases) keyphrases = state.keyphrases;
             if (state.idf) idf = state.idf;
             if (state.vocabulary) vocabulary = new Set(state.vocabulary);
+            if (state.lsaVectors) lsaVectors = state.lsaVectors;
+            if (state.lsaTermMatrix) lsaTermMatrix = state.lsaTermMatrix;
+            if (state.lsaTerms) lsaTerms = state.lsaTerms;
         } catch (error) {
             console.error('Error loading state:', error);
         }
@@ -644,6 +655,8 @@
                     updateBM25(features, tabId.toString());
                 } else if (settings.groupingAlgorithm === 'keyphrase') {
                     updateKeyphrases(features, tabId.toString());
+                } else if (settings.groupingAlgorithm === 'lsa') {
+                    updateLSA(features, tabId.toString());
                 }
                 groupTabs();
             }
@@ -696,4 +709,263 @@
         generateGroupName,
         extractKeyphrases,
       };
+    }
+
+    // Latent Semantic Analysis (LSA) implementation
+    function updateLSA(newDocument, docId) {
+        // Skip processing if document is too short
+        if (!newDocument || newDocument.length < 20) {
+            console.log(`Document ${docId} is too short for meaningful LSA analysis`);
+            lsaVectors[docId] = {};
+            return;
+        }
+
+        // Tokenize and preprocess the document
+        const terms = newDocument.toLowerCase()
+            .split(/\W+/)
+            .filter(term => term.length > 2 && !isStopWord(term));
+        
+        // Add terms to global vocabulary
+        terms.forEach(term => vocabulary.add(term));
+        
+        // Create a document-term frequency map
+        const termFreq = {};
+        terms.forEach(term => {
+            termFreq[term] = (termFreq[term] || 0) + 1;
+        });
+        
+        // Store the document vector
+        documents[docId] = termFreq;
+        
+        // Only perform SVD when we have enough documents
+        if (Object.keys(documents).length >= 2) {
+            performLSA();
+        } else {
+            // For the first document, just use TF-IDF as a fallback
+            updateTFIDF(newDocument, docId);
+            lsaVectors[docId] = tfidf[docId];
+        }
+    }
+
+    // Function to perform Latent Semantic Analysis using Singular Value Decomposition
+    function performLSA() {
+        try {
+            // Create the term list from vocabulary
+            lsaTerms = Array.from(vocabulary);
+            
+            // Create the document-term matrix
+            const docIds = Object.keys(documents);
+            const termMatrix = [];
+            
+            // Fill the matrix with term frequencies
+            for (const docId of docIds) {
+                const docVector = Array(lsaTerms.length).fill(0);
+                
+                for (let i = 0; i < lsaTerms.length; i++) {
+                    const term = lsaTerms[i];
+                    docVector[i] = documents[docId][term] || 0;
+                }
+                
+                // Apply TF-IDF weighting to the term frequencies
+                for (let i = 0; i < lsaTerms.length; i++) {
+                    const term = lsaTerms[i];
+                    const tf = docVector[i];
+                    if (tf > 0) {
+                        // Calculate IDF
+                        const docCount = docIds.filter(id => documents[id][term]).length;
+                        const idfValue = Math.log((docIds.length + 1) / (docCount + 0.5)) + 1;
+                        // Apply TF-IDF weighting
+                        docVector[i] = tf * idfValue;
+                    }
+                }
+                
+                termMatrix.push(docVector);
+            }
+            
+            // Perform Singular Value Decomposition (SVD)
+            const { u, s, v } = performSVD(termMatrix, settings.lsaDimensions);
+            
+            // Create the reduced-dimension document vectors
+            for (let i = 0; i < docIds.length; i++) {
+                const docId = docIds[i];
+                const reducedVector = {};
+                
+                // Use the left singular vectors as the LSA vectors
+                for (let j = 0; j < settings.lsaDimensions; j++) {
+                    reducedVector[`dim_${j}`] = u[i][j] * s[j];
+                }
+                
+                lsaVectors[docId] = reducedVector;
+            }
+            
+            // Store the term matrix for future use
+            lsaTermMatrix = v;
+            
+        } catch (error) {
+            console.error('Error performing LSA:', error);
+        }
+    }
+
+    // Function to perform Singular Value Decomposition (SVD)
+    function performSVD(matrix, k) {
+        // This is a simplified SVD implementation
+        // In a production environment, you would use a library like numeric.js or math.js
+        
+        // For simplicity, we'll use a basic implementation that works for small matrices
+        
+        // Step 1: Calculate the covariance matrix (A^T * A)
+        const covMatrix = calculateCovarianceMatrix(matrix);
+        
+        // Step 2: Calculate eigenvalues and eigenvectors of the covariance matrix
+        const { eigenvalues, eigenvectors } = calculateEigenvectors(covMatrix, k);
+        
+        // Step 3: Sort eigenvalues and eigenvectors
+        const indices = eigenvalues.map((val, idx) => idx)
+            .sort((a, b) => eigenvalues[b] - eigenvalues[a]);
+        
+        const sortedEigenvalues = indices.map(i => eigenvalues[i]);
+        const sortedEigenvectors = indices.map(i => eigenvectors[i]);
+        
+        // Step 4: Take the top k eigenvalues and eigenvectors
+        const topK = Math.min(k, sortedEigenvalues.length);
+        const s = sortedEigenvalues.slice(0, topK);
+        const v = sortedEigenvectors.slice(0, topK);
+        
+        // Step 5: Calculate the left singular vectors (U = A * V * S^-1)
+        const u = calculateLeftSingularVectors(matrix, v, s);
+        
+        return { u, s, v };
+    }
+
+    // Helper function to calculate the covariance matrix
+    function calculateCovarianceMatrix(matrix) {
+        const numRows = matrix.length;
+        const numCols = matrix[0].length;
+        const result = Array(numCols).fill().map(() => Array(numCols).fill(0));
+        
+        for (let i = 0; i < numCols; i++) {
+            for (let j = 0; j < numCols; j++) {
+                let sum = 0;
+                for (let k = 0; k < numRows; k++) {
+                    sum += matrix[k][i] * matrix[k][j];
+                }
+                result[i][j] = sum;
+            }
+        }
+        
+        return result;
+    }
+
+    // Helper function to calculate eigenvalues and eigenvectors
+    function calculateEigenvectors(matrix, k) {
+        // This is a simplified implementation using power iteration
+        // In a real application, you would use a more robust method
+        
+        const n = matrix.length;
+        const eigenvalues = [];
+        const eigenvectors = [];
+        
+        // Use power iteration to find the top k eigenvalues and eigenvectors
+        for (let i = 0; i < k && i < n; i++) {
+            // Initialize a random vector
+            let vector = Array(n).fill().map(() => Math.random());
+            
+            // Normalize the vector
+            vector = normalizeVector(vector);
+            
+            // Perform power iteration
+            for (let iter = 0; iter < 100; iter++) {
+                // Multiply matrix by vector
+                const newVector = multiplyMatrixVector(matrix, vector);
+                
+                // Normalize the result
+                const normalizedVector = normalizeVector(newVector);
+                
+                // Check for convergence
+                if (vectorDistance(vector, normalizedVector) < 1e-10) {
+                    break;
+                }
+                
+                vector = normalizedVector;
+            }
+            
+            // Calculate the eigenvalue (Rayleigh quotient)
+            const eigenvalue = calculateRayleighQuotient(matrix, vector);
+            
+            // Store the eigenvalue and eigenvector
+            eigenvalues.push(eigenvalue);
+            eigenvectors.push(vector);
+            
+            // Deflate the matrix to find the next eigenvalue
+            deflateMatrix(matrix, vector, eigenvalue);
+        }
+        
+        return { eigenvalues, eigenvectors };
+    }
+
+    // Helper function to normalize a vector
+    function normalizeVector(vector) {
+        const norm = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+        return vector.map(val => val / (norm || 1));
+    }
+
+    // Helper function to calculate the distance between two vectors
+    function vectorDistance(v1, v2) {
+        let sum = 0;
+        for (let i = 0; i < v1.length; i++) {
+            sum += (v1[i] - v2[i]) * (v1[i] - v2[i]);
+        }
+        return Math.sqrt(sum);
+    }
+
+    // Helper function to multiply a matrix by a vector
+    function multiplyMatrixVector(matrix, vector) {
+        const result = Array(matrix.length).fill(0);
+        
+        for (let i = 0; i < matrix.length; i++) {
+            for (let j = 0; j < vector.length; j++) {
+                result[i] += matrix[i][j] * vector[j];
+            }
+        }
+        
+        return result;
+    }
+
+    // Helper function to calculate the Rayleigh quotient
+    function calculateRayleighQuotient(matrix, vector) {
+        const Av = multiplyMatrixVector(matrix, vector);
+        const vAv = vector.reduce((sum, val, i) => sum + val * Av[i], 0);
+        const vv = vector.reduce((sum, val) => sum + val * val, 0);
+        
+        return vAv / vv;
+    }
+
+    // Helper function to deflate a matrix
+    function deflateMatrix(matrix, vector, eigenvalue) {
+        const n = matrix.length;
+        
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                matrix[i][j] -= eigenvalue * vector[i] * vector[j];
+            }
+        }
+    }
+
+    // Helper function to calculate the left singular vectors
+    function calculateLeftSingularVectors(matrix, v, s) {
+        const numRows = matrix.length;
+        const numCols = v.length;
+        const u = Array(numRows).fill().map(() => Array(numCols).fill(0));
+        
+        for (let i = 0; i < numRows; i++) {
+            for (let j = 0; j < numCols; j++) {
+                let sum = 0;
+                for (let k = 0; k < matrix[0].length; k++) {
+                    sum += matrix[i][k] * v[j][k];
+                }
+                u[i][j] = sum / (s[j] || 1);
+            }
+        }
+        
+        return u;
     }
