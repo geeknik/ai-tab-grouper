@@ -1,12 +1,18 @@
 {
-  "name": "tab-grouping-extension",
+  "name": "ai-tab-grouper",
   "version": "1.0.0",
-  "description": "A Brave extension for intelligent tab grouping",
-  "main": "background.js",
+  "description": "AI-powered tab grouping extension for Brave browser",
+  "type": "module",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "devDependencies": {
-    "jest": "^27.5.1"
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
   }
 }
