@@ -473,27 +473,75 @@ function updateBM25(newDocument, docId) {
     });
 }
 
-// Improved Keyphrase Extraction using regex for 2- and 3-word phrases
+// Improved Keyphrase Extraction using NLP-inspired techniques
 function extractKeyphrases(text, numPhrases = 5) {
     if (!text || text.length < 20) {
         console.log("Text too short for meaningful keyphrase extraction");
         return [];
     }
     
-    // Extract words using regex and filter out very short ones and stop words
-    let words = (text.toLowerCase().match(/\b\w+\b/g) || []).filter(word => word.length > 2 && !isStopWord(word));
+    // Clean and normalize the text
+    const cleanText = text.toLowerCase()
+        .replace(/[^\w\s-]/g, ' ')  // Replace non-alphanumeric with spaces
+        .replace(/\s+/g, ' ')       // Normalize whitespace
+        .trim();
     
-    // Use a sliding window approach to generate 2-gram and 3-gram phrases
-    let phrases = [];
+    // Extract words and filter out stopwords and short words
+    const words = cleanText.split(/\s+/).filter(word => word.length > 2 && !isStopWord(word));
+    
+    // Build n-grams (2-word and 3-word phrases)
+    const ngrams = [];
+    const ngramFreq = {};
+    
+    // Generate 2-grams and 3-grams
     for (let n of [2, 3]) {
         for (let i = 0; i <= words.length - n; i++) {
-            let phrase = words.slice(i, i + n).join(' ');
-            phrases.push(phrase);
+            const phrase = words.slice(i, i + n).join(' ');
+            
+            // Skip phrases that are all stopwords or too short
+            if (isStopPhrase(phrase) || phrase.length < 5) continue;
+            
+            // Count frequency of each phrase
+            ngramFreq[phrase] = (ngramFreq[phrase] || 0) + 1;
+            ngrams.push(phrase);
         }
     }
     
-    // Remove duplicate phrases and limit the result to numPhrases phrases
-    return Array.from(new Set(phrases)).slice(0, numPhrases);
+    // Calculate a score for each phrase based on frequency and other factors
+    const phraseScores = {};
+    for (const phrase of Object.keys(ngramFreq)) {
+        // Base score is the frequency
+        let score = ngramFreq[phrase];
+        
+        // Bonus for phrases with title capitalization in the original text
+        if (new RegExp('\\b' + phrase.replace(/\s+/g, '\\s+') + '\\b', 'i').test(text)) {
+            score *= 1.5;
+        }
+        
+        // Bonus for phrases that start with capital letters in the original text
+        if (new RegExp('\\b' + phrase.split(' ')[0] + '\\b', 'i').test(text) && 
+            text.includes(' ' + phrase.split(' ')[0].charAt(0).toUpperCase() + phrase.split(' ')[0].slice(1))) {
+            score *= 1.2;
+        }
+        
+        // Slightly prefer shorter phrases (2-grams over 3-grams)
+        if (phrase.split(' ').length === 2) {
+            score *= 1.1;
+        }
+        
+        phraseScores[phrase] = score;
+    }
+    
+    // Sort phrases by score and return top N
+    const sortedPhrases = Object.entries(phraseScores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, numPhrases)
+        .map(([phrase, score]) => ({
+            text: phrase,
+            score: score
+        }));
+    
+    return sortedPhrases;
 }
 
 function isStopPhrase(phrase) {
@@ -685,33 +733,49 @@ function generateGroupName(clusterDocs) {
         ? settings.maxGroupNameLength
         : 15);
     
+    // Separate URLs and titles for better analysis
+    const urls = [];
+    const titles = [];
+    const urlTitleRegex = /^(https?:\/\/[^\s]+)\s+(.+)$/i;
+    
+    for (const doc of clusterDocs) {
+        const match = doc.match(urlTitleRegex);
+        if (match) {
+            urls.push(match[1]);
+            titles.push(match[2]);
+        }
+    }
+    
     // Extract domain names for potential use in group naming
     const domains = [];
     const urlRegex = /https?:\/\/([^\/]+)/i;
     
-    for (const doc of clusterDocs) {
-        const match = doc.match(urlRegex);
+    for (const url of urls) {
+        const match = url.match(urlRegex);
         if (match && match[1]) {
             // Extract domain without www. and .com/.org/etc.
             let domain = match[1].replace(/^www\./, '').split('.')[0];
             if (domain && domain.length > 2) {
-                domains.push(domain);
+                domains.push(domain.toLowerCase());
             }
         }
     }
     
-    // Process all terms from the documents
-    const combinedTerms = clusterDocs.join(' ')
+    // Process all terms from the TITLES only (more meaningful)
+    const combinedTerms = titles.join(' ')
         .toLowerCase()
         .replace(/[^\w\s-]/g, ' ')
         .split(/\s+/)
-        .filter(term => term.length > 2 && !isStopWord(term));
+        .filter(term => term.length > 3 && !isStopWord(term));
     
     // Count term frequencies
     const termFreq = {};
     combinedTerms.forEach(term => {
         termFreq[term] = (termFreq[term] || 0) + 1;
     });
+    
+    // Extract keyphrases from titles (2-3 word combinations)
+    const keyphrases = extractKeyphrases(titles.join(' '));
     
     // Sort terms by frequency
     const sortedTerms = Object.entries(termFreq)
@@ -730,55 +794,61 @@ function generateGroupName(clusterDocs) {
         .sort((a, b) => b[1] - a[1])
         .map(([domain]) => domain)[0];
     
-    // Extract page types/categories from URLs and titles
-    const pageTypes = extractPageTypes(clusterDocs);
+    // Extract page types/categories from titles
+    const pageTypes = extractPageTypes(titles);
     
     // Generate name based on multiple factors
     let name = "Group";
     
-    // Special case for GitHub repositories with JavaScript content
-    if (commonDomain && commonDomain.toLowerCase() === 'github' && 
-        clusterDocs.some(doc => doc.toLowerCase().includes('javascript'))) {
-        return 'Github: javascript'.slice(0, maxLength);
+    // If we have high-quality keyphrases, use them first
+    if (keyphrases.length > 0) {
+        const topKeyphrase = keyphrases[0].text;
+        if (topKeyphrase && topKeyphrase.length > 3 && topKeyphrase.length <= maxLength) {
+            return topKeyphrase.charAt(0).toUpperCase() + topKeyphrase.slice(1);
+        }
     }
     
-    // Special case for learning/tutorial content with JavaScript
-    if (pageTypes.includes('Learning') && 
-        clusterDocs.some(doc => doc.toLowerCase().includes('javascript'))) {
-        return 'Learning: javascript'.slice(0, maxLength);
+    // Special case for GitHub repositories with programming languages
+    const programmingLanguages = ['javascript', 'python', 'java', 'css', 'html', 'ruby', 'php', 'swift', 'kotlin', 'rust', 'go'];
+    for (const lang of programmingLanguages) {
+        if (combinedTerms.includes(lang) && (commonDomain === 'github' || titles.some(t => t.toLowerCase().includes('repository')))) {
+            return `${lang.charAt(0).toUpperCase() + lang.slice(1)} Code`;
+        }
+    }
+    
+    // Special case for learning/tutorial content
+    if (pageTypes.includes('Learning') && sortedTerms.length > 0) {
+        return `Learn: ${sortedTerms[0]}`.slice(0, maxLength);
     }
     
     // Special case for React components
-    if (clusterDocs.some(doc => doc.toLowerCase().includes('react')) && 
-        clusterDocs.some(doc => doc.toLowerCase().includes('component'))) {
-        return 'react & components'.slice(0, maxLength);
+    if (titles.some(t => t.toLowerCase().includes('react')) && 
+        titles.some(t => t.toLowerCase().includes('component'))) {
+        return 'React Components';
     }
     
-    // Strategy 1: Domain + Top Terms
-    if (commonDomain && sortedTerms.length > 0) {
-        // If we have both domain and meaningful terms, combine them
+    // Strategy 1: Use Page Type + meaningful term
+    if (pageTypes.length > 0 && sortedTerms.length > 0) {
+        name = `${pageTypes[0]}: ${sortedTerms[0]}`;
+    }
+    // Strategy 2: Multiple meaningful terms (we prefer multiple terms over domain names)
+    else if (sortedTerms.length >= 2) {
+        name = `${sortedTerms[0]} & ${sortedTerms[1]}`;
+    }
+    // Strategy 3: Domain + Top Term (only if we can't find enough meaningful terms)
+    else if (commonDomain && sortedTerms.length > 0) {
         const topTerm = sortedTerms[0];
-        if (topTerm !== commonDomain.toLowerCase()) {
+        if (topTerm !== commonDomain) {
             name = `${commonDomain.charAt(0).toUpperCase() + commonDomain.slice(1)}: ${topTerm}`;
-        } else if (sortedTerms.length > 1) {
-            name = `${commonDomain.charAt(0).toUpperCase() + commonDomain.slice(1)}: ${sortedTerms[1]}`;
         } else {
             name = commonDomain.charAt(0).toUpperCase() + commonDomain.slice(1);
         }
     }
-    // Strategy 2: Page Type + Top Terms
-    else if (pageTypes.length > 0 && sortedTerms.length > 0) {
-        name = `${pageTypes[0]}: ${sortedTerms[0]}`;
-    }
-    // Strategy 3: Multiple Top Terms
-    else if (sortedTerms.length >= 2) {
-        name = `${sortedTerms[0]} & ${sortedTerms[1]}`;
-    }
-    // Strategy 4: Single Term or Domain
-    else if (commonDomain) {
-        name = commonDomain.charAt(0).toUpperCase() + commonDomain.slice(1);
-    } else if (sortedTerms.length > 0) {
+    // Strategy 4: Single Term or Domain as last resort
+    else if (sortedTerms.length > 0) {
         name = sortedTerms[0].charAt(0).toUpperCase() + sortedTerms[0].slice(1);
+    } else if (commonDomain) {
+        name = commonDomain.charAt(0).toUpperCase() + commonDomain.slice(1);
     }
     
     // Strictly enforce maxLength
@@ -786,35 +856,51 @@ function generateGroupName(clusterDocs) {
 }
 
 /**
- * Extracts potential page types or categories from URLs and titles
- * @param {Array<string>} docs - Array of document strings (URL + title)
+ * Extracts potential page types or categories from titles
+ * @param {Array<string>} titles - Array of tab titles
  * @returns {Array<string>} - Array of potential page types
  */
-function extractPageTypes(docs) {
+function extractPageTypes(titles) {
     const pageTypePatterns = [
-        { regex: /\b(news|article|blog|post)\b/i, type: 'News' },
-        { regex: /\b(shop|product|store|buy|price)\b/i, type: 'Shopping' },
-        { regex: /\b(video|watch|stream|movie|film)\b/i, type: 'Video' },
-        { regex: /\b(doc|document|pdf|spreadsheet|presentation)\b/i, type: 'Document' },
-        { regex: /\b(research|paper|study|journal|science)\b/i, type: 'Research' },
-        { regex: /\b(social|profile|timeline|feed)\b/i, type: 'Social' },
-        { regex: /\b(forum|discussion|thread|comment|reply)\b/i, type: 'Discussion' },
-        { regex: /\b(tutorial|guide|how-to|learn|course)\b/i, type: 'Learning' },
-        { regex: /\b(review|rating|opinion|compare)\b/i, type: 'Review' },
-        { regex: /\b(travel|hotel|flight|booking|reservation)\b/i, type: 'Travel' },
-        { regex: /\b(recipe|food|cooking|ingredient|meal)\b/i, type: 'Recipe' },
-        { regex: /\b(code|programming|developer|github|repository)\b/i, type: 'Code' },
-        { regex: /\b(game|gaming|play|player)\b/i, type: 'Gaming' },
-        { regex: /\b(health|medical|doctor|symptom|treatment)\b/i, type: 'Health' },
-        { regex: /\b(finance|bank|money|invest|stock)\b/i, type: 'Finance' }
+        { regex: /\b(news|article|blog|post|update)\b/i, type: 'News' },
+        { regex: /\b(shop|product|store|buy|price|purchase|cart|checkout)\b/i, type: 'Shopping' },
+        { regex: /\b(video|watch|stream|movie|film|episode|show|youtube)\b/i, type: 'Videos' },
+        { regex: /\b(doc|document|pdf|spreadsheet|presentation|slides|report)\b/i, type: 'Documents' },
+        { regex: /\b(research|paper|study|journal|science|analysis|theory)\b/i, type: 'Research' },
+        { regex: /\b(social|profile|timeline|feed|post|status|tweet)\b/i, type: 'Social' },
+        { regex: /\b(forum|discussion|thread|comment|reply|community|answers|question)\b/i, type: 'Discussion' },
+        { regex: /\b(tutorial|guide|how-to|learn|course|lesson|education|training)\b/i, type: 'Learning' },
+        { regex: /\b(review|rating|opinion|compare|comparison|versus|vs)\b/i, type: 'Reviews' },
+        { regex: /\b(travel|hotel|flight|booking|reservation|vacation|destination|trip)\b/i, type: 'Travel' },
+        { regex: /\b(recipe|food|cooking|ingredient|meal|baking|dish|cuisine)\b/i, type: 'Recipes' },
+        { regex: /\b(code|programming|developer|github|repository|script|software|app)\b/i, type: 'Development' },
+        { regex: /\b(game|gaming|play|player|walkthrough|strategy|cheats|steam)\b/i, type: 'Gaming' },
+        { regex: /\b(health|medical|doctor|symptom|treatment|medicine|wellness|fitness)\b/i, type: 'Health' },
+        { regex: /\b(finance|bank|money|invest|stock|market|trading|crypto|portfolio)\b/i, type: 'Finance' },
+        { regex: /\b(music|song|album|artist|playlist|spotify|band|concert)\b/i, type: 'Music' },
+        { regex: /\b(weather|forecast|temperature|climate|storm|rain|snow)\b/i, type: 'Weather' },
+        { regex: /\b(sports|team|player|match|game|score|stats|standings)\b/i, type: 'Sports' },
+        { regex: /\b(email|inbox|message|mail|gmail|outlook)\b/i, type: 'Email' },
+        { regex: /\b(map|direction|location|address|place|navigation)\b/i, type: 'Maps' },
+        { regex: /\b(chat|message|conversation|ai|bot|assistant)\b/i, type: 'Chat' },
+        { regex: /\b(work|job|career|resume|linkedin|salary|interview)\b/i, type: 'Work' }
     ];
     
     const typeFreq = {};
+    const combinedTitles = titles.join(' ').toLowerCase();
     
-    // Check each document against each pattern
-    for (const doc of docs) {
+    // First check for common patterns in the combined titles
+    for (const pattern of pageTypePatterns) {
+        if (pattern.regex.test(combinedTitles)) {
+            typeFreq[pattern.type] = (typeFreq[pattern.type] || 0) + 2; // Give higher weight to patterns found in combined text
+        }
+    }
+    
+    // Then check each title individually
+    for (const title of titles) {
+        const lowerTitle = title.toLowerCase();
         for (const pattern of pageTypePatterns) {
-            if (pattern.regex.test(doc)) {
+            if (pattern.regex.test(lowerTitle)) {
                 typeFreq[pattern.type] = (typeFreq[pattern.type] || 0) + 1;
             }
         }
