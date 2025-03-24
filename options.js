@@ -23,7 +23,15 @@ function saveSettings() {
         }, 2000);
         
         // Notify the background script to update its settings
-        chrome.runtime.sendMessage({action: 'updateSettings'});
+        chrome.runtime.sendMessage({action: 'updateSettings'}, response => {
+            // Handle potential error with the background page not being ready
+            if (chrome.runtime.lastError) {
+                console.warn('Could not notify background script:', chrome.runtime.lastError.message);
+                // Continue anyway - settings will be loaded next time background runs
+            } else if (response && response.success) {
+                console.log('Background script acknowledged settings update');
+            }
+        });
     });
 }
 
