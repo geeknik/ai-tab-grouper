@@ -621,44 +621,100 @@ function jaccardSimilarity(set1, set2) {
 // Function to cluster tabs based on the chosen algorithm
 function clusterTabs(tabVectors) {
     if (settings.groupingAlgorithm === 'hac') {
-        return hierarchicalAgglomerativeClustering(tabVectors);
+        // Use hierarchical clustering but ensure minimum group size of 2
+        const clusters = hierarchicalAgglomerativeClustering(tabVectors);
+        return clusters.filter(cluster => cluster.length >= 2);
     }
 
     const clusters = [];
     const assigned = new Set();
 
+    // Sort tab IDs by the richness of their content (favoring tabs with more terms)
     const sortedTabIds = Object.keys(tabVectors).sort((a, b) => {
-        const sumA = Object.values(tabVectors[a]).reduce((sum, val) => sum + val, 0);
-        const sumB = Object.values(tabVectors[b]).reduce((sum, val) => sum + val, 0);
-        return sumB - sumA;
+        const richA = Object.keys(tabVectors[a]).length;
+        const richB = Object.keys(tabVectors[b]).length;
+        return richB - richA; // Start with content-rich tabs as cluster centers
     });
 
+    // First pass: Create initial clusters around content-rich tabs
     for (const tabId of sortedTabIds) {
-        if (!assigned.has(tabId)) {
+        if (assigned.has(tabId)) continue;
+        
+        const cluster = [tabId];
+        assigned.add(tabId);
+
+        // Find related tabs
+        for (const otherTabId of sortedTabIds) {
+            if (tabId === otherTabId || assigned.has(otherTabId)) continue;
+            
+            let similarity;
+            if (settings.groupingAlgorithm === 'keyphrase') {
+                similarity = jaccardSimilarity(new Set(tabVectors[tabId]), new Set(tabVectors[otherTabId]));
+            } else {
+                similarity = cosineSimilarity(tabVectors[tabId], tabVectors[otherTabId]);
+            }
+            
+            if (similarity > settings.similarityThreshold) {
+                console.log(`👍 Tab ${otherTabId} matches cluster seed ${tabId} with similarity ${similarity.toFixed(3)}`);
+                cluster.push(otherTabId);
+                assigned.add(otherTabId);
+            } else if (similarity > (settings.similarityThreshold * 0.8)) {
+                console.log(`🤔 Tab ${otherTabId} is close to cluster seed ${tabId} with similarity ${similarity.toFixed(3)}`);
+            }
+        }
+
+        // Only keep clusters with at least 2 tabs
+        if (cluster.length >= 2) {
+            clusters.push(cluster);
+        } else {
+            // Release the tab if it didn't form a valid cluster
+            assigned.delete(tabId);
+        }
+    }
+    
+    // Second pass: Try to group any remaining tabs
+    const unassignedTabs = sortedTabIds.filter(id => !assigned.has(id));
+    
+    if (unassignedTabs.length >= 2) {
+        console.log(`🔄 Second clustering pass with ${unassignedTabs.length} remaining tabs`);
+        
+        // Try a lower threshold for the second pass to catch more relationships
+        const secondPassThreshold = Math.max(0.1, settings.similarityThreshold * 0.7);
+        
+        for (const tabId of unassignedTabs) {
+            if (assigned.has(tabId)) continue;
+            
             const cluster = [tabId];
             assigned.add(tabId);
-
-            for (const otherTabId of sortedTabIds) {
-                if (tabId !== otherTabId && !assigned.has(otherTabId)) {
-                    let similarity;
-                    if (settings.groupingAlgorithm === 'keyphrase') {
-                        similarity = jaccardSimilarity(new Set(tabVectors[tabId]), new Set(tabVectors[otherTabId]));
-                    } else {
-                        similarity = cosineSimilarity(tabVectors[tabId], tabVectors[otherTabId]);
-                    }
-                    if (similarity > settings.similarityThreshold) {
-                        cluster.push(otherTabId);
-                        assigned.add(otherTabId);
-                    }
+            
+            for (const otherTabId of unassignedTabs) {
+                if (tabId === otherTabId || assigned.has(otherTabId)) continue;
+                
+                let similarity;
+                if (settings.groupingAlgorithm === 'keyphrase') {
+                    similarity = jaccardSimilarity(new Set(tabVectors[tabId]), new Set(tabVectors[otherTabId]));
+                } else {
+                    similarity = cosineSimilarity(tabVectors[tabId], tabVectors[otherTabId]);
+                }
+                
+                if (similarity > secondPassThreshold) {
+                    console.log(`👍 (2nd pass) Tab ${otherTabId} matches cluster seed ${tabId} with similarity ${similarity.toFixed(3)}`);
+                    cluster.push(otherTabId);
+                    assigned.add(otherTabId);
                 }
             }
-
-            if (cluster.length > 2) {
+            
+            // Only keep clusters with at least 2 tabs
+            if (cluster.length >= 2) {
                 clusters.push(cluster);
+            } else {
+                // Release the tab if it didn't form a valid cluster
+                assigned.delete(tabId);
             }
         }
     }
 
+    console.log(`📊 Created ${clusters.length} clusters, leaving ${sortedTabIds.length - assigned.size} tabs ungrouped`);
     return clusters;
 }
 
@@ -679,12 +735,26 @@ const memoizedCosineSimilarity = (() => {
 // Hierarchical Agglomerative Clustering (HAC) implementation
 function hierarchicalAgglomerativeClustering(tabVectors) {
     const tabIds = Object.keys(tabVectors);
+    
+    // Don't bother clustering if we have too few tabs
+    if (tabIds.length < 2) {
+        console.log('⚠️ Not enough tabs for hierarchical clustering');
+        return [];
+    }
+    
+    // Initialize each tab as its own cluster
     let clusters = tabIds.map(id => [id]);
+    console.log(`🔄 Starting HAC with ${clusters.length} individual tabs`);
 
+    // Keep track of merges for debugging
+    const mergeLog = [];
+
+    // Continue merging until we can't find good matches or there's only one cluster left
     while (clusters.length > 1) {
         let maxSimilarity = -1;
         let mergeIndices = [-1, -1];
 
+        // Find the two most similar clusters
         for (let i = 0; i < clusters.length; i++) {
             for (let j = i + 1; j < clusters.length; j++) {
                 const similarity = clusterSimilarity(clusters[i], clusters[j], tabVectors);
@@ -695,30 +765,54 @@ function hierarchicalAgglomerativeClustering(tabVectors) {
             }
         }
 
+        // If the best similarity is below our threshold, stop merging
         if (maxSimilarity < settings.similarityThreshold) {
+            console.log(`🛑 HAC stopping: best similarity ${maxSimilarity.toFixed(3)} below threshold ${settings.similarityThreshold}`);
             break;
         }
 
+        // Otherwise, merge the two most similar clusters
         const [i, j] = mergeIndices;
+        const cluster1 = clusters[i];
+        const cluster2 = clusters[j];
+        
+        // Log this merge for debugging
+        mergeLog.push({
+            cluster1: cluster1.join(','),
+            cluster2: cluster2.join(','),
+            similarity: maxSimilarity.toFixed(3)
+        });
+        
+        console.log(`🔗 HAC merging clusters: [${cluster1.join(',')}] + [${cluster2.join(',')}] with similarity ${maxSimilarity.toFixed(3)}`);
+        
+        // Perform the merge
         clusters[i] = clusters[i].concat(clusters[j]);
         clusters.splice(j, 1);
     }
 
-    return clusters.filter(cluster => cluster.length > 2);
+    // Filter out clusters that are too small (less than 2 tabs)
+    const validClusters = clusters.filter(cluster => cluster.length >= 2);
+    
+    console.log(`📊 HAC produced ${validClusters.length} clusters out of ${clusters.length} total`);
+    
+    return validClusters;
 }
 
+// Calculate similarity between two clusters
 function clusterSimilarity(cluster1, cluster2, tabVectors) {
     let totalSimilarity = 0;
     let comparisons = 0;
 
     for (const id1 of cluster1) {
         for (const id2 of cluster2) {
-            totalSimilarity += cosineSimilarity(tabVectors[id1], tabVectors[id2]);
+            const sim = cosineSimilarity(tabVectors[id1], tabVectors[id2]);
+            totalSimilarity += sim;
             comparisons++;
         }
     }
 
-    return totalSimilarity / comparisons;
+    // Average similarity between all tabs in both clusters
+    return comparisons > 0 ? totalSimilarity / comparisons : 0;
 }
 
 // Function to generate a group name based on common terms
@@ -1465,38 +1559,73 @@ async function groupTabs() {
 
         // Group tabs based on clusters
         console.log(`🎯 Will attempt to create ${clusters.length} tab groups`);
+        const successfulGroups = [];
+        
         for (const cluster of clusters) {
-            if (cluster.length > 1) {
+            // Skip clusters with less than 2 tabs - they don't make sense as groups
+            if (!cluster || cluster.length < 2) {
+                console.log('⚠️ Skipping cluster with fewer than 2 tabs');
+                continue;
+            }
+            
+            try {
+                // Convert all tab IDs to numbers to ensure compatibility
+                const numericTabIds = cluster.map(tabId => 
+                    typeof tabId === 'string' ? parseInt(tabId, 10) : tabId
+                );
+                
+                // Filter out any non-valid tab IDs (e.g. negative numbers, NaN)
+                const validNumericTabIds = numericTabIds.filter(id => 
+                    !isNaN(id) && id > 0
+                );
+                
+                if (validNumericTabIds.length < 2) {
+                    console.log('⚠️ Skipping cluster after filtering invalid tab IDs (fewer than 2 valid tabs)');
+                    continue;
+                }
+                
+                console.log(`🔄 Creating group with ${validNumericTabIds.length} tabs: ${validNumericTabIds.join(', ')}`);
+                
+                // Verify all tab IDs exist before grouping
+                const validTabs = await chrome.tabs.query({});
+                const validTabIds = validTabs.map(tab => tab.id);
+                const filteredTabIds = validNumericTabIds.filter(id => validTabIds.includes(id));
+                
+                if (filteredTabIds.length < 2) {
+                    console.warn('⚠️ Skipping group creation: not enough valid tabs exist');
+                    continue;
+                }
+                
                 try {
-                    // Convert all tab IDs to numbers to ensure compatibility
-                    const numericTabIds = cluster.map(tabId => 
-                        typeof tabId === 'string' ? parseInt(tabId, 10) : tabId
-                    );
+                    const groupId = await chrome.tabs.group({ tabIds: filteredTabIds });
                     
-                    console.log(`🔄 Creating group with ${numericTabIds.length} tabs: ${numericTabIds.join(', ')}`);
+                    // Find the actual tab objects for these IDs for better naming
+                    const groupTabs = tabs.filter(tab => filteredTabIds.includes(tab.id));
                     
-                    // Verify all tab IDs exist before grouping
-                    const validTabs = await chrome.tabs.query({});
-                    const validTabIds = validTabs.map(tab => tab.id);
-                    const filteredTabIds = numericTabIds.filter(id => validTabIds.includes(id));
-                    
-                    if (filteredTabIds.length < 2) {
-                        console.warn('⚠️ Not enough valid tabs for grouping');
+                    if (groupTabs.length < 2) {
+                        console.warn('⚠️ Unexpected error: tab objects not found for group');
                         continue;
                     }
                     
-                    const groupId = await chrome.tabs.group({ tabIds: filteredTabIds });
-                    const groupName = generateGroupName(filteredTabIds.map(tabId => {
-                        const tab = tabs.find(t => t.id === tabId);
-                        return tab ? `${tab.url} ${tab.title}` : '';
-                    }).filter(Boolean));
+                    // Get tab titles and URLs for group naming
+                    const tabData = groupTabs.map(tab => `${tab.url} ${tab.title}`).filter(Boolean);
+                    const groupName = generateGroupName(tabData);
                     
                     console.log(`✅ Group created with ID ${groupId}, naming as "${groupName}"`);
+                    successfulGroups.push({
+                        id: groupId,
+                        name: groupName,
+                        tabCount: filteredTabIds.length
+                    });
+                    
                     try {
                         // Before updating, verify the group still exists
                         const groups = await chrome.tabGroups.query({});
                         if (groups.some(g => g.id === groupId)) {
                             await chrome.tabGroups.update(groupId, { title: groupName });
+                            
+                            // Record that these tabs were grouped together for learning
+                            recordTabGrouping(filteredTabIds, tabs);
                         } else {
                             console.warn(`⚠️ Group ${groupId} no longer exists, cannot update name`);
                         }
@@ -1504,19 +1633,27 @@ async function groupTabs() {
                         console.warn(`⚠️ Could not update group ${groupId}: ${updateError.message}`);
                         // Continue anyway - the group was created but couldn't be renamed
                     }
-                    
-                    // Record that these tabs were grouped together for learning
-                    recordTabGrouping(filteredTabIds, tabs);
                 } catch (error) {
-                    console.error('❌ Error creating or updating tab group:', error);
-                    console.error('Tab IDs in cluster:', cluster);
+                    console.error('❌ Error creating tab group:', error);
+                    console.error('Tab IDs in cluster:', validNumericTabIds);
                 }
+            } catch (error) {
+                console.error('❌ Error processing cluster:', error);
+                console.error('Cluster data:', cluster);
             }
         }
 
         // Get current tab groups after making changes
         const updatedGroups = await getExistingGroups();
-        console.log(`📊 After grouping: ${updatedGroups.length} groups exist`);
+        console.log(`📊 After grouping: ${updatedGroups.length} groups exist (created ${successfulGroups.length} new groups)`);
+        
+        // Log a summary of the groups we created
+        if (successfulGroups.length > 0) {
+            console.log('📋 Summary of created groups:');
+            successfulGroups.forEach(group => {
+                console.log(`   - "${group.name}" with ${group.tabCount} tabs`);
+            });
+        }
         
         // Analyze grouping effectiveness and adjust threshold if needed
         if (settings.adaptiveThreshold) {
