@@ -50,6 +50,7 @@ import {
   jaccardSimilarity,
   generateGroupName,
   extractKeyphrases,
+  extractPageTypes,
   groupTabs,
   isGroupableTab,
   loadSettings,
@@ -154,6 +155,94 @@ describe('Tab Grouping Extension', () => {
       const name = generateGroupName(docs);
       console.log('Generated name:', name, 'length:', name.length);
       expect(name.length).toBeLessThanOrEqual(10);
+    });
+    
+    test('combines domain and top term when both are available', () => {
+      const docs = [
+        'https://github.com/user/repo JavaScript Project Repository',
+        'https://github.com/user/another-repo Another JavaScript Project'
+      ];
+      const name = generateGroupName(docs);
+      expect(name).toBe('Github: javascript');
+    });
+    
+    test('uses page type and top term when domain varies', () => {
+      const docs = [
+        'https://site1.com/tutorials/js Learn JavaScript Tutorial',
+        'https://site2.com/learn/javascript Complete JavaScript Course'
+      ];
+      const name = generateGroupName(docs);
+      expect(name).toBe('Learning: javascript');
+    });
+    
+    test('combines multiple top terms when no common domain or page type', () => {
+      const docs = [
+        'https://site1.com/page1 React Framework Overview',
+        'https://site2.com/page2 Using React Components'
+      ];
+      const name = generateGroupName(docs);
+      expect(name).toBe('react & components');
+    });
+    
+    test('handles empty input gracefully', () => {
+      expect(generateGroupName([])).toBe('Group');
+      expect(generateGroupName(null)).toBe('Group');
+      expect(generateGroupName(undefined)).toBe('Group');
+    });
+    
+    test('filters out stop words from group names', () => {
+      const docs = [
+        'https://site.com/page The and of with JavaScript',
+        'https://site.com/other The and of with Programming'
+      ];
+      const name = generateGroupName(docs);
+      // Should not contain stop words like "the", "and", "of", "with"
+      expect(name.toLowerCase()).not.toMatch(/\b(the|and|of|with)\b/);
+      // Should contain meaningful terms
+      expect(name.toLowerCase()).toMatch(/\b(javascript|programming)\b/);
+    });
+  });
+
+  describe('extractPageTypes', () => {
+    test('identifies news content', () => {
+      const docs = [
+        'https://news.com/article Latest News Article',
+        'https://blog.com/post Blog Post About Current Events'
+      ];
+      const types = extractPageTypes(docs);
+      expect(types).toContain('News');
+    });
+    
+    test('identifies shopping content', () => {
+      const docs = [
+        'https://shop.com/product Buy This Product',
+        'https://store.com/item Best Price for Item'
+      ];
+      const types = extractPageTypes(docs);
+      expect(types).toContain('Shopping');
+    });
+    
+    test('identifies multiple content types with correct frequency order', () => {
+      const docs = [
+        'https://site.com/video Watch This Video',
+        'https://site.com/tutorial Learn From This Tutorial',
+        'https://site.com/another-video Another Video To Watch',
+        'https://site.com/article News Article'
+      ];
+      const types = extractPageTypes(docs);
+      // Video appears twice, so it should be first
+      expect(types[0]).toBe('Video');
+      expect(types).toContain('Learning');
+      expect(types).toContain('News');
+    });
+    
+    test('returns empty array when no recognized types', () => {
+      const docs = [
+        'https://site.com/page Generic Page With No Type',
+        'https://site.com/other Another Generic Page'
+      ];
+      const types = extractPageTypes(docs);
+      expect(types).toEqual([]);
     });
   });
 
@@ -279,5 +368,90 @@ describe('Tab Grouping Extension', () => {
         console.error = originalConsoleError;
       }
     });
+  });
+});
+
+describe('Clustering Filter Tests', () => {
+  const { clusterTabs } = require('./background.js');
+  
+  // Helper cosine similarity: simple function that returns 1 if same, 0 otherwise
+  function simpleCosine(doc1, doc2) {
+    // Assume all vectors equal for testing
+    return 1;
+  }
+  
+  // Override cosineSimilarity in our test scope if needed
+  // For testing, we assume our clusterTabs uses cosineSimilarity for non-keyphrase algorithms.
+  
+  test('clusterTabs filters out clusters with less than 3 tabs', () => {
+    // Create a simulated tabVectors object.
+    // Let's assume each tab vector is identical so cosine similarity always 1 > threshold
+    // Create 5 tabs, but arrange manually so that one cluster ends up being of size 2
+    const tabVectors = {
+      '1': { a: 1 },
+      '2': { a: 1 },
+      '3': { a: 1 },
+      '4': { a: 0 }, // This one will be isolated if similarity is 0
+      '5': { a: 0 }  // Similar to 4 so cluster of size 2
+    };
+    // To simulate isolation for tabs 4 and 5, we override cosineSimilarity to return 0 when one of them is compared with any tab having value 1
+    const originalCosine = global.cosineSimilarity;
+    global.cosineSimilarity = (vec1, vec2) => {
+      if ((vec1.a === 1 && vec2.a === 1) || (vec1.a === 0 && vec2.a === 0)) {
+        return 1;
+      }
+      return 0;
+    };
+    
+    // Set similarityThreshold to 0.5 in settings
+    global.settings = { similarityThreshold: 0.5 };
+    
+    const clusters = clusterTabs(tabVectors);
+    
+    // Expected: Only the cluster with tabs '1','2','3' should be returned, group with tabs '4' and '5' is filtered out
+    expect(clusters).toEqual([['1', '2', '3']]);
+    
+    // Restore original cosineSimilarity if needed
+    global.cosineSimilarity = originalCosine;
+  });
+
+  test('hierarchicalAgglomerativeClustering filters out clusters with less than 3 tabs', () => {
+    // Here we simulate a scenario for hierarchicalAgglomerativeClustering using similar setup as above.
+    const { hierarchicalAgglomerativeClustering } = require('./background.js');
+    
+    // Create simulated tabVectors
+    const tabVectors = {
+      '1': { a: 1 },
+      '2': { a: 1 },
+      '3': { a: 1 },
+      '4': { a: 0 },
+      '5': { a: 0 },
+      '6': { a: 1 }
+    };
+
+    // Override cosineSimilarity similarly
+    const originalCosine = global.cosineSimilarity;
+    global.cosineSimilarity = (vec1, vec2) => {
+      if ((vec1.a === 1 && vec2.a === 1) || (vec1.a === 0 && vec2.a === 0)) {
+        return 1;
+      }
+      return 0;
+    };
+    
+    // Set similarityThreshold to 0.5 in settings
+    global.settings = { similarityThreshold: 0.5 };
+    
+    const clusters = hierarchicalAgglomerativeClustering(tabVectors);
+    
+    // Expect cluster with tabs that have a=1: tabs '1','2','3','6' (size 4) to exist, and group with a=0
+    // tabs '4' and '5' form a cluster of size 2 which should be filtered out
+    const expectedCluster = ['1', '2', '3', '6'];
+    // Since order might vary, sort the clusters for comparison
+    const sortedClusters = clusters.map(cluster => cluster.sort());
+    expect(sortedClusters).toContainEqual(expectedCluster.sort());
+    expect(clusters.some(cluster => cluster.length === 2)).toBe(false);
+    
+    // Restore original cosineSimilarity
+    global.cosineSimilarity = originalCosine;
   });
 });

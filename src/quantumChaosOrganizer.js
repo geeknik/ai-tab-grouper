@@ -36,40 +36,453 @@
  * @returns {Array<Array<Object>>} - Array of tab groups (each group is an array of tab objects).
  */
 export function groupTabsQuantumChaosOrganizer(tabs) {
+  console.log('🧪 QCO algorithm started with', tabs.length, 'tabs');
+  
   if (!tabs || !Array.isArray(tabs) || tabs.length === 0) {
+    console.warn('⚠️ QCO received invalid or empty tabs array');
     return [];
   }
 
   // Filter out any pinned tabs (defensive programming)
   const unpinnedTabs = tabs.filter(tab => !tab.pinned);
+  console.log('📑 QCO processing', unpinnedTabs.length, 'unpinned tabs');
   
   if (unpinnedTabs.length === 0) {
+    console.warn('⚠️ QCO: No unpinned tabs to process');
+    return [];
+  }
+  
+  // Skip processing if we don't have enough tabs to form a reasonable group
+  if (unpinnedTabs.length < 3) {
+    console.log('📊 Not enough tabs for QCO to form meaningful groups');
     return [];
   }
 
-  // Step 1: Introduce randomness inspired by quantum uncertainty.
-  const tabsWithChaos = unpinnedTabs.map(tab => ({
-    ...tab,
-    chaosFactor: Math.random()
-  }));
-
-  // Step 2: Sort tabs by the chaosFactor to introduce a non-deterministic order.
-  tabsWithChaos.sort((a, b) => a.chaosFactor - b.chaosFactor);
-
-  // Step 3: Group tabs based on their chaos factors.
-  const numGroups = Math.max(1, Math.floor(unpinnedTabs.length / 3));
-  const groups = Array.from({ length: numGroups }, () => []);
-  
-  tabsWithChaos.forEach((tab, index) => {
-    const groupIndex = index % numGroups;
-    groups[groupIndex].push({
-      id: tab.id,
-      pinned: tab.pinned,
-      url: tab.url,
-      title: tab.title
+  try {
+    // Step 1: Extract basic features from tabs and add controlled randomness
+    const tabFeatures = unpinnedTabs.map(tab => {
+      // Ensure tab has required properties
+      if (!tab.url || !tab.title) {
+        console.warn(`⚠️ QCO: Tab missing required properties:`, tab);
+        return {
+          ...tab,
+          features: {},
+          chaosFactor: Math.random() * 0.4 + 0.6
+        };
+      }
+      
+      return {
+        ...tab,
+        features: extractBasicFeatures(tab.url, tab.title),
+        chaosFactor: Math.random() * 0.4 + 0.6 // Controlled randomness (0.6-1.0)
+      };
     });
-  });
+    
+    console.log('🔀 QCO: Feature extraction complete with chaos factors');
+    
+    // Step 2: Calculate similarity matrix with chaos influence
+    const similarityMatrix = calculateSimilarityMatrix(tabFeatures);
+    console.log('📊 QCO: Similarity matrix created');
+    
+    // Step 3: Apply clustering with chaos-weighted edges
+    const groups = chaosWeightedClustering(tabFeatures, similarityMatrix);
+    console.log(`🧩 QCO: Created ${groups.length} groups`);
+    
+    return groups;
+  } catch (error) {
+    console.error('❌ QCO algorithm error:', error);
+    
+    // Fallback to a simple fixed-size grouping if an error occurs
+    console.log('⚠️ QCO: Using fallback grouping method');
+    
+    // Create simple groups of 3-4 tabs
+    const groupSize = 3;
+    const groups = [];
+    
+    for (let i = 0; i < unpinnedTabs.length; i += groupSize) {
+      const group = unpinnedTabs.slice(i, i + groupSize).map(tab => ({
+        id: tab.id,
+        pinned: tab.pinned,
+        url: tab.url,
+        title: tab.title
+      }));
+      
+      if (group.length >= 3) {
+        groups.push(group);
+      }
+    }
+    
+    console.log(`🧩 QCO fallback: Created ${groups.length} groups`);
+    return groups;
+  }
+}
 
-  // Filter out single-tab groups
-  return groups.filter(group => group.length > 1);
+/**
+ * Extracts basic features from URL and title
+ * @param {string} url - The URL of the tab
+ * @param {string} title - The title of the tab
+ * @returns {Object} - Object with terms as keys and frequencies as values
+ */
+function extractBasicFeatures(url, title) {
+  try {
+    // Simple keyword extraction from URL and title
+    const text = `${url} ${title}`.toLowerCase();
+    const terms = (text.match(/\b\w{3,}\b/g) || [])
+      .filter(word => !isStopWord(word));
+    
+    // If very few terms, return empty object to rely more on chaos
+    if (terms.length < 3) {
+      return {};
+    }
+    
+    // Convert to term frequency map
+    return terms.reduce((acc, word) => {
+      acc[word] = (acc[word] || 0) + 1;
+      return acc;
+    }, {});
+  } catch (error) {
+    console.error('❌ Error extracting features:', error);
+    return {};
+  }
+}
+
+/**
+ * Check if a word is a common stop word
+ * @param {string} word - The word to check
+ * @returns {boolean} - True if the word is a stop word
+ */
+function isStopWord(word) {
+  const stopWords = new Set([
+    'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'as', 'at',
+    'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by',
+    'can', 'com', 'could', 'did', 'do', 'does', 'doing', 'down', 'during',
+    'each', 'few', 'for', 'from', 'further',
+    'had', 'has', 'have', 'having', 'he', 'her', 'here', 'hers', 'herself', 'him', 'himself', 'his', 'how',
+    'i', 'if', 'in', 'into', 'is', 'it', 'its', 'itself',
+    'just', 'me', 'more', 'most', 'my', 'myself',
+    'no', 'nor', 'not', 'now', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
+    'same', 'she', 'should', 'so', 'some', 'such',
+    'than', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they', 'this', 'those', 'through', 'to', 'too',
+    'under', 'until', 'up', 'very',
+    'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'will', 'with',
+    'www', 'you', 'your', 'yours', 'yourself', 'yourselves',
+    'http', 'https', 'html', 'htm', 'php', 'asp', 'jsp', 'cgi', 'page', 'site', 'web', 'click', 'view'
+  ]);
+  
+  return stopWords.has(word.toLowerCase());
+}
+
+/**
+ * Calculate similarity matrix between tabs
+ * @param {Array<Object>} tabFeatures - Array of tab objects with features
+ * @returns {Array<Array<number>>} - 2D similarity matrix
+ */
+function calculateSimilarityMatrix(tabFeatures) {
+  try {
+    const n = tabFeatures.length;
+    const matrix = Array(n).fill().map(() => Array(n).fill(0));
+    
+    for (let i = 0; i < n; i++) {
+      // A tab is perfectly similar to itself
+      matrix[i][i] = 1;
+      
+      for (let j = i + 1; j < n; j++) {
+        try {
+          // Calculate content similarity
+          const contentSimilarity = calculateCosineSimilarity(
+            tabFeatures[i].features,
+            tabFeatures[j].features
+          );
+          
+          // Apply chaos factor to similarity
+          const chaosFactor = (tabFeatures[i].chaosFactor + tabFeatures[j].chaosFactor) / 2;
+          
+          // Blend deterministic similarity with chaos factor
+          // Higher chaos weight (0.4) means more randomness in grouping
+          const chaosWeight = 0.4;
+          matrix[i][j] = (1 - chaosWeight) * contentSimilarity + chaosWeight * chaosFactor;
+          matrix[j][i] = matrix[i][j]; // Symmetric matrix
+        } catch (error) {
+          console.error(`❌ Error calculating similarity between tabs ${i} and ${j}:`, error);
+          // Use just chaos factor if similarity calculation fails
+          const chaosFactor = (tabFeatures[i].chaosFactor + tabFeatures[j].chaosFactor) / 2;
+          matrix[i][j] = chaosFactor;
+          matrix[j][i] = chaosFactor;
+        }
+      }
+    }
+    
+    return matrix;
+  } catch (error) {
+    console.error('❌ Error building similarity matrix:', error);
+    
+    // Return a default matrix with random values
+    const n = tabFeatures.length;
+    const defaultMatrix = Array(n).fill().map(() => Array(n).fill(0));
+    
+    // Fill with random values weighted toward keeping tabs separate
+    for (let i = 0; i < n; i++) {
+      defaultMatrix[i][i] = 1; // Identical to self
+      for (let j = i + 1; j < n; j++) {
+        const val = Math.random() * 0.3; // Low similarity
+        defaultMatrix[i][j] = val;
+        defaultMatrix[j][i] = val;
+      }
+    }
+    
+    return defaultMatrix;
+  }
+}
+
+/**
+ * Calculate cosine similarity between two feature vectors
+ * @param {Object} features1 - First feature vector
+ * @param {Object} features2 - Second feature vector
+ * @returns {number} - Similarity score between 0 and 1
+ */
+function calculateCosineSimilarity(features1, features2) {
+  // Handle empty feature vectors
+  if (Object.keys(features1).length === 0 || Object.keys(features2).length === 0) {
+    return 0;
+  }
+  
+  try {
+    // Find all unique terms
+    const allTerms = new Set([...Object.keys(features1), ...Object.keys(features2)]);
+    
+    let dotProduct = 0;
+    let magnitude1 = 0;
+    let magnitude2 = 0;
+    
+    // Calculate dot product and magnitudes
+    for (const term of allTerms) {
+      const val1 = features1[term] || 0;
+      const val2 = features2[term] || 0;
+      
+      dotProduct += val1 * val2;
+      magnitude1 += val1 * val1;
+      magnitude2 += val2 * val2;
+    }
+    
+    magnitude1 = Math.sqrt(magnitude1);
+    magnitude2 = Math.sqrt(magnitude2);
+    
+    // Avoid division by zero
+    if (magnitude1 === 0 || magnitude2 === 0) {
+      return 0;
+    }
+    
+    return dotProduct / (magnitude1 * magnitude2);
+  } catch (error) {
+    console.error('❌ Error calculating cosine similarity:', error);
+    return 0;
+  }
+}
+
+/**
+ * Apply chaos-weighted clustering to form tab groups
+ * @param {Array<Object>} tabFeatures - Array of tab objects with features
+ * @param {Array<Array<number>>} similarityMatrix - 2D similarity matrix
+ * @returns {Array<Array<Object>>} - Array of tab groups
+ */
+function chaosWeightedClustering(tabFeatures, similarityMatrix) {
+  try {
+    const n = tabFeatures.length;
+    
+    // If we have very few tabs, apply simpler grouping logic
+    if (n <= 3) {
+      console.log('📊 Not enough tabs for complex clustering, applying simple grouping');
+      return n === 0 ? [] : [tabFeatures.map(tab => ({
+        id: tab.id,
+        pinned: tab.pinned,
+        url: tab.url,
+        title: tab.title
+      }))];
+    }
+    
+    // Determine similarity threshold with some randomness for quantum-inspired behavior
+    const baseSimilarityThreshold = 0.35;
+    const randomThresholdFactor = Math.random() * 0.1 - 0.05; // +/- 0.05
+    const similarityThreshold = baseSimilarityThreshold + randomThresholdFactor;
+    
+    console.log(`🎯 QCO using similarity threshold: ${similarityThreshold.toFixed(2)}`);
+    
+    // Step 1: Initialize each tab as its own cluster
+    let clusters = tabFeatures.map((tab, index) => ({
+      tabs: [tab],
+      index: index
+    }));
+    
+    // Step 2: Merge clusters based on similarity until no more merges are possible
+    let mergeOccurred = true;
+    let iterationCount = 0;
+    const maxIterations = Math.min(100, n * 2); // Safety limit to prevent infinite loops
+    
+    while (mergeOccurred && clusters.length > 1 && iterationCount < maxIterations) {
+      mergeOccurred = false;
+      iterationCount++;
+      
+      // Find best pair to merge
+      let bestSimilarity = similarityThreshold;
+      let mergePair = [-1, -1];
+      
+      for (let i = 0; i < clusters.length; i++) {
+        for (let j = i + 1; j < clusters.length; j++) {
+          try {
+            const similarity = calculateClusterSimilarity(
+              clusters[i], 
+              clusters[j], 
+              similarityMatrix
+            );
+            
+            if (similarity > bestSimilarity) {
+              bestSimilarity = similarity;
+              mergePair = [i, j];
+              mergeOccurred = true;
+            }
+          } catch (error) {
+            console.error(`❌ Error calculating similarity between clusters ${i} and ${j}:`, error);
+          }
+        }
+      }
+      
+      // Merge the best pair if found
+      if (mergeOccurred) {
+        const [i, j] = mergePair;
+        console.log(`🔗 QCO merging clusters with similarity ${bestSimilarity.toFixed(2)}`);
+        clusters[i].tabs = clusters[i].tabs.concat(clusters[j].tabs);
+        clusters.splice(j, 1);
+      }
+    }
+    
+    console.log(`📊 QCO clustering completed after ${iterationCount} iterations with ${clusters.length} clusters`);
+    
+    // Step 3: Convert cluster objects to tab arrays and filter out small groups
+    const finalGroups = clusters
+      .map(cluster => cluster.tabs.map(tab => ({
+        id: tab.id,
+        pinned: tab.pinned,
+        url: tab.url,
+        title: tab.title
+      })))
+      .filter(group => group.length > 2);
+    
+    console.log(`🧩 QCO produced ${finalGroups.length} groups after filtering small ones`);
+    
+    // If no groups were created, try an alternative approach by lowering the threshold
+    if (finalGroups.length === 0 && tabFeatures.length >= 5) {
+      console.log('⚠️ QCO produced no groups, trying with lower threshold');
+      
+      // Create groups based on a lower similarity threshold
+      const lowerThreshold = Math.max(0.15, similarityThreshold - 0.2);
+      console.log(`🎯 Trying again with lower threshold: ${lowerThreshold.toFixed(2)}`);
+      
+      // Initialize clusters again
+      clusters = tabFeatures.map((tab, index) => ({
+        tabs: [tab],
+        index: index
+      }));
+      
+      // Do one pass with lower threshold
+      let anyMerges = false;
+      
+      for (let i = 0; i < clusters.length; i++) {
+        for (let j = i + 1; j < clusters.length; j++) {
+          try {
+            const similarity = calculateClusterSimilarity(
+              clusters[i], 
+              clusters[j], 
+              similarityMatrix
+            );
+            
+            if (similarity > lowerThreshold) {
+              // Merge these clusters
+              clusters[i].tabs = clusters[i].tabs.concat(clusters[j].tabs);
+              clusters.splice(j, 1);
+              j--; // Adjust index after removal
+              anyMerges = true;
+            }
+          } catch (error) {
+            // Ignore errors in fallback approach
+          }
+        }
+      }
+      
+      if (anyMerges) {
+        // Convert to final format
+        const fallbackGroups = clusters
+          .map(cluster => cluster.tabs.map(tab => ({
+            id: tab.id,
+            pinned: tab.pinned,
+            url: tab.url,
+            title: tab.title
+          })))
+          .filter(group => group.length > 2);
+        
+        console.log(`🧩 QCO fallback produced ${fallbackGroups.length} groups`);
+        return fallbackGroups;
+      }
+    }
+    
+    return finalGroups;
+  } catch (error) {
+    console.error('❌ Error in chaosWeightedClustering:', error);
+    
+    // Return a simple fallback grouping
+    const groupSize = 3;
+    const fallbackGroups = [];
+    
+    for (let i = 0; i < tabFeatures.length; i += groupSize) {
+      const group = tabFeatures.slice(i, i + groupSize).map(tab => ({
+        id: tab.id,
+        pinned: tab.pinned,
+        url: tab.url,
+        title: tab.title
+      }));
+      
+      if (group.length >= 2) {
+        fallbackGroups.push(group);
+      }
+    }
+    
+    console.log(`🧩 QCO error recovery produced ${fallbackGroups.length} simple groups`);
+    return fallbackGroups;
+  }
+}
+
+/**
+ * Calculate similarity between two clusters
+ * @param {Object} cluster1 - First cluster
+ * @param {Object} cluster2 - Second cluster
+ * @param {Array<Array<number>>} similarityMatrix - 2D similarity matrix
+ * @returns {number} - Average similarity between clusters
+ */
+function calculateClusterSimilarity(cluster1, cluster2, similarityMatrix) {
+  try {
+    let totalSimilarity = 0;
+    let comparisonCount = 0;
+    
+    // Calculate average similarity between all pairs of tabs in the two clusters
+    for (const tab1 of cluster1.tabs) {
+      const index1 = tab1.index === undefined ? cluster1.index : tab1.index;
+      
+      for (const tab2 of cluster2.tabs) {
+        const index2 = tab2.index === undefined ? cluster2.index : tab2.index;
+        
+        if (index1 < 0 || index1 >= similarityMatrix.length || 
+            index2 < 0 || index2 >= similarityMatrix.length) {
+          console.warn(`⚠️ Invalid indices: ${index1}, ${index2} for matrix of size ${similarityMatrix.length}`);
+          continue;
+        }
+        
+        totalSimilarity += similarityMatrix[index1][index2];
+        comparisonCount++;
+      }
+    }
+    
+    return comparisonCount === 0 ? 0 : totalSimilarity / comparisonCount;
+  } catch (error) {
+    console.error('❌ Error calculating cluster similarity:', error);
+    return 0; // Return no similarity on error
+  }
 } 
