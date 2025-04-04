@@ -68,7 +68,7 @@ function groupTabsTFIDF(tabs) {
     return groups;
 }
 
-// Generate a group title from the most common term in the group
+// Generate a group title from the most common and relevant terms in the group
 function generateGroupTitle(tabs) {
     const termCounts = {};
     for (const tab of tabs) {
@@ -82,14 +82,29 @@ function generateGroupTitle(tabs) {
             termCounts[token] = (termCounts[token] || 0) + 1;
         }
     }
+
     const sortedTerms = Object.entries(termCounts)
         .sort((a, b) => b[1] - a[1])
         .map(([term]) => term);
 
-    let title = sortedTerms[0] || 'Group';
+    // Compose a title from the top 2-3 terms
+    let titleTerms = sortedTerms.slice(0, 3).filter(Boolean);
+    let title = titleTerms.join(' ').trim();
+
+    if (!title) {
+        title = 'Group';
+    }
+
     if (title.length > settings.maxGroupNameLength) {
         title = title.slice(0, settings.maxGroupNameLength);
+        // Avoid cutting off in the middle of a word
+        const lastSpace = title.lastIndexOf(' ');
+        if (lastSpace > 3) {
+            title = title.slice(0, lastSpace);
+        }
     }
+
+    // Capitalize first letter
     return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
