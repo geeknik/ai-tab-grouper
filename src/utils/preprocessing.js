@@ -173,4 +173,14 @@ export function preprocessDocument(text, options = {}) {
         uniqueTerms,
         length: tokens.length
     };
-} 
+}
+
+/**
+ * Checks if a word is a stop word
+ * @param {string} word
+ * @returns {boolean}
+ */
+export function isStopWord(word) {
+    if (!word) return false;
+    return STOP_WORDS.has(word.toLowerCase());
+}
