@@ -150,6 +150,14 @@ function groupTabsLSA(tabs) {
 
     if (lsa.documents.size < 2) return [];
 
+    // Force SVD computation now
+    try {
+        lsa._performSVD();
+    } catch (e) {
+        console.warn('LSA SVD failed:', e);
+        return [];
+    }
+
     const groups = [];
     const assigned = new Set();
 
