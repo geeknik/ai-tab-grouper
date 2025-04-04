@@ -150,7 +150,7 @@ function groupTabsLSA(tabs) {
 
     if (lsa.documents.size < 2) return [];
 
-    // Force SVD computation now
+    let groups = [];
     try {
         lsa._performSVD();
     } catch (e) {
@@ -158,7 +158,6 @@ function groupTabsLSA(tabs) {
         return [];
     }
 
-    const groups = [];
     const assigned = new Set();
 
     for (const tab of tabs) {
@@ -181,6 +180,14 @@ function groupTabsLSA(tabs) {
         }
         if (group.length >= 2) groups.push(group);
     }
+
+    if (groups.length === 0) {
+        console.warn('⚠️ LSA produced no groups, falling back');
+        groups = fallbackGrouping(tabs);
+    } else {
+        console.log(`🧩 LSA: Created ${groups.length} groups`);
+    }
+
     return groups;
 }
 
