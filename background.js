@@ -1,11 +1,16 @@
 // Import utilities
+// Import utilities
 import { isStopWord, tokenize, preprocessDocument } from './src/utils/preprocessing.js';
 import { cosineSimilarity } from './src/utils/math.js';
-// Import quantum chaos organizer module (will be replaced later)
-let groupTabsQuantumChaosOrganizer = function(tabs) {
-    console.log('🧪 QCO algorithm started with', tabs.length, 'tabs');
-    
-    if (!tabs || !Array.isArray(tabs) || tabs.length < 3) {
+// Import quantum chaos organizer module
+import { groupTabsQuantumChaosOrganizer } from './src/quantumChaosOrganizer.js';
+
+
+// Calculate a deterministic but chaotic entropy value for a URL
+function calculateTabEntropy(url) {
+    // Simple hash function
+    let hash = 0;
+    for (let i = 0; i < url.length; i++) {
         console.warn('⚠️ QCO: Not enough tabs for meaningful analysis');
         return [];
     }
@@ -123,28 +128,6 @@ function calculateQuantumSimilarityMatrix(tabFeatures) {
     }
     
     return matrix;
-}
-
-// Calculate cosine similarity between term frequency vectors
-function calculateContentSimilarity(terms1, terms2) {
-    const allTerms = new Set([...Object.keys(terms1), ...Object.keys(terms2)]);
-    let dotProduct = 0;
-    let magnitude1 = 0;
-    let magnitude2 = 0;
-    
-    for (const term of allTerms) {
-        const val1 = terms1[term] || 0;
-        const val2 = terms2[term] || 0;
-        dotProduct += val1 * val2;
-        magnitude1 += val1 * val1;
-        magnitude2 += val2 * val2;
-    }
-    
-    magnitude1 = Math.sqrt(magnitude1);
-    magnitude2 = Math.sqrt(magnitude2);
-    
-    if (magnitude1 === 0 || magnitude2 === 0) return 0;
-    return dotProduct / (magnitude1 * magnitude2);
 }
 
 

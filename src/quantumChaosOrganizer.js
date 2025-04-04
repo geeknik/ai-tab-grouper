@@ -411,17 +411,27 @@ function calculateClusterSimilarity(cluster1, cluster2, similarityMatrix) {
     
     // Calculate average similarity between all pairs of tabs in the two clusters
     for (const tab1 of cluster1.tabs) {
-      const index1 = tab1.index === undefined ? cluster1.index : tab1.index;
-      
+      // Use the index property stored on the tab feature object
+      const index1 = tab1.index;
+
       for (const tab2 of cluster2.tabs) {
-        const index2 = tab2.index === undefined ? cluster2.index : tab2.index;
-        
-        if (index1 < 0 || index1 >= similarityMatrix.length || 
-            index2 < 0 || index2 >= similarityMatrix.length) {
-          console.warn(`⚠️ Invalid indices: ${index1}, ${index2} for matrix of size ${similarityMatrix.length}`);
+        const index2 = tab2.index;
+
+        // Check bounds using the matrix dimensions directly
+        if (index1 === undefined || index2 === undefined ||
+            index1 < 0 || index1 >= similarityMatrix.length ||
+            index2 < 0 || index2 >= similarityMatrix.length ||
+            !similarityMatrix[index1]) { // Check row existence
+          console.warn(`⚠️ Invalid indices or matrix access: ${index1}, ${index2} for matrix size ${similarityMatrix.length}`);
           continue;
         }
-        
+
+        // Ensure the column index is also valid for the specific row
+        if (index2 >= similarityMatrix[index1].length) {
+             console.warn(`⚠️ Invalid column index: ${index2} for row ${index1} with length ${similarityMatrix[index1].length}`);
+             continue;
+        }
+
         totalSimilarity += similarityMatrix[index1][index2];
         comparisonCount++;
       }
