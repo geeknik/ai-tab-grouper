@@ -24,11 +24,16 @@ function saveSettings() {
             saveButton.style.backgroundColor = '#4CAF50';
         }, 2000);
 
-        // Notify background script, but suppress error if not connected
+        // Notify background script, but suppress specific error if not connected
         try {
             chrome.runtime.sendMessage({action: 'updateSettings'}, function(response) {
                 if (chrome.runtime.lastError) {
-                    console.warn('Could not notify background script:', chrome.runtime.lastError.message);
+                    const msg = chrome.runtime.lastError.message;
+                    if (msg.includes('Could not establish connection. Receiving end does not exist.')) {
+                        // Suppress this common error when service worker is inactive
+                        return;
+                    }
+                    console.warn('Could not notify background script:', msg);
                 } else if (response && response.success) {
                     console.log('Background script acknowledged settings update');
                 } else {
