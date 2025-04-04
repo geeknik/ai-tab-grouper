@@ -155,7 +155,7 @@ function groupTabsLSA(tabs) {
         lsa._performSVD();
     } catch (e) {
         console.warn('LSA SVD failed:', e);
-        return [];
+        return fallbackGrouping(tabs);
     }
 
     const assigned = new Set();
@@ -249,7 +249,12 @@ async function groupTabs() {
             groups = groupTabsQuantumChaosOrganizer(groupableTabs);
             break;
         default:
-            groups = [groupableTabs];
+            groups = fallbackGrouping(groupableTabs);
+    }
+
+    if (!groups || groups.length === 0) {
+        console.warn('⚠️ No groups created, fallback to chunk grouping');
+        groups = fallbackGrouping(groupableTabs);
     }
 
     for (const group of groups) {
