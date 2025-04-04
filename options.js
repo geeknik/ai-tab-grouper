@@ -31,6 +31,8 @@ function saveSettings() {
                     console.warn('Could not notify background script:', chrome.runtime.lastError.message);
                 } else if (response && response.success) {
                     console.log('Background script acknowledged settings update');
+                } else {
+                    console.warn('Could not notify background script: No receiving end');
                 }
             });
         } catch (e) {
