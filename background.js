@@ -1,37 +1,30 @@
 /* global chrome */
 
-// Import utilities
 import { isStopWord, tokenize, preprocessDocument } from './src/utils/preprocessing.js';
 import { cosineSimilarity } from './src/utils/math.js';
+import { LSA } from './src/algorithms/lsa.js';
 
 // Calculate a deterministic but chaotic entropy value for a URL
 function calculateTabEntropy(url) {
     let hash = 0;
     for (let i = 0; i < url.length; i++) {
         hash = ((hash << 5) - hash) + url.charCodeAt(i);
-        hash |= 0; // Convert to 32bit integer
+        hash |= 0;
     }
-    // Normalize to 0..1
     return Math.abs(hash) / 0x7FFFFFFF;
 }
 
-// Placeholder for QCO similarity matrix calculation
 function calculateQuantumSimilarityMatrix(tabFeatures) {
     const n = tabFeatures.length;
     const matrix = Array.from({ length: n }, () => Array(n).fill(0));
-    for (let i = 0; i < n; i++) {
-        matrix[i][i] = 1;
-    }
+    for (let i = 0; i < n; i++) matrix[i][i] = 1;
     return matrix;
 }
 
-// Placeholder for QCO clustering
 function quantumClustering(tabFeatures, similarityMatrix, threshold) {
-    // For now, just group all tabs together
     return [tabFeatures.map(f => ({ id: f.id, url: f.url, title: f.title }))];
 }
 
-// Simple fallback grouping
 function fallbackGrouping(tabs) {
     const groups = [];
     const groupSize = 3;
@@ -42,7 +35,6 @@ function fallbackGrouping(tabs) {
     return groups;
 }
 
-// TF-IDF based grouping
 function groupTabsTFIDF(tabs) {
     const docs = tabs.map(tab => preprocessDocument(`${tab.title} ${tab.url}`));
     const vectors = docs.map(d => d.normalizedFreq);
@@ -68,7 +60,6 @@ function groupTabsTFIDF(tabs) {
     return groups;
 }
 
-// Generate a group title from the most common and relevant terms in the group
 function generateGroupTitle(tabs) {
     const termCounts = {};
     for (const tab of tabs) {
@@ -87,28 +78,20 @@ function generateGroupTitle(tabs) {
         .sort((a, b) => b[1] - a[1])
         .map(([term]) => term);
 
-    // Compose a title from the top 2-3 terms
     let titleTerms = sortedTerms.slice(0, 3).filter(Boolean);
     let title = titleTerms.join(' ').trim();
 
-    if (!title) {
-        title = 'Group';
-    }
+    if (!title) title = 'Group';
 
     if (title.length > settings.maxGroupNameLength) {
         title = title.slice(0, settings.maxGroupNameLength);
-        // Avoid cutting off in the middle of a word
         const lastSpace = title.lastIndexOf(' ');
-        if (lastSpace > 3) {
-            title = title.slice(0, lastSpace);
-        }
+        if (lastSpace > 3) title = title.slice(0, lastSpace);
     }
 
-    // Capitalize first letter
     return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
-// Main QCO grouping function
 function groupTabsQuantumChaosOrganizer(tabs) {
     if (!tabs || tabs.length < 2) {
         console.warn('⚠️ QCO: Not enough tabs for meaningful analysis');
@@ -156,7 +139,43 @@ function groupTabsQuantumChaosOrganizer(tabs) {
     }
 }
 
-// Log extension startup
+function groupTabsLSA(tabs) {
+    if (!tabs || tabs.length < 2) return [];
+
+    const lsa = new LSA({ numDimensions: settings.lsaDimensions || 50 });
+    tabs.forEach(tab => {
+        const text = `${tab.title} ${tab.url}`;
+        lsa.addDocument(tab.id.toString(), text);
+    });
+
+    if (lsa.documents.size < 2) return [];
+
+    const groups = [];
+    const assigned = new Set();
+
+    for (const tab of tabs) {
+        if (assigned.has(tab.id)) continue;
+        const group = [tab];
+        assigned.add(tab.id);
+
+        for (const other of tabs) {
+            if (tab.id === other.id || assigned.has(other.id)) continue;
+            let sim = 0;
+            try {
+                sim = lsa.similarity(tab.id.toString(), other.id.toString());
+            } catch {
+                sim = 0;
+            }
+            if (sim >= settings.similarityThreshold) {
+                group.push(other);
+                assigned.add(other.id);
+            }
+        }
+        if (group.length >= 2) groups.push(group);
+    }
+    return groups;
+}
+
 console.log('🚀 AI Tab Grouper extension starting up');
 
 let settings = {
@@ -207,6 +226,9 @@ async function groupTabs() {
     switch (settings.groupingAlgorithm) {
         case 'tfidf':
             groups = groupTabsTFIDF(groupableTabs);
+            break;
+        case 'lsa':
+            groups = groupTabsLSA(groupableTabs);
             break;
         case 'qco':
             groups = groupTabsQuantumChaosOrganizer(groupableTabs);
@@ -261,5 +283,4 @@ chrome.alarms.onAlarm.addListener(alarm => {
     }
 });
 
-// Initialize immediately
 loadSettings();
