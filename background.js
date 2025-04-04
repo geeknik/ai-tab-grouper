@@ -3,7 +3,7 @@
 import { isStopWord, tokenize, preprocessDocument } from './src/utils/preprocessing.js';
 import { cosineSimilarity } from './src/utils/math.js';
 // Import quantum chaos organizer module
-import { groupTabsQuantumChaosOrganizer } from './src/quantumChaosOrganizer.js';
+// import { groupTabsQuantumChaosOrganizer } from './src/quantumChaosOrganizer.js'; // Removed import
 
 
 // Calculate a deterministic but chaotic entropy value for a URL
@@ -67,18 +67,22 @@ function calculateTabEntropy(url) {
         // Fallback to a simple grouping if an error occurs
         console.log('⚠️ QCO: Using fallback grouping method');
         return fallbackGrouping(tabs);
+    } // ADD closing brace for the catch block
+}; // ADD closing brace for the groupTabsQuantumChaosOrganizer function definition
+
+// MOVE the fallbackGrouping function definition here:
 // Simple fallback grouping (keep if used outside QCO)
 function fallbackGrouping(tabs) {
     const groups = [];
     const groupSize = 3;
-    
+
     for (let i = 0; i < tabs.length; i += groupSize) {
         const group = tabs.slice(i, i + groupSize);
         if (group.length >= 2) {
             groups.push(group);
         }
     }
-    
+
     return groups;
 }
 
