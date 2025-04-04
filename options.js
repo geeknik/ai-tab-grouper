@@ -104,8 +104,49 @@ function showAlgorithmDescription(algorithm) {
     }
 }
 
+/**
+ * Request background script to group tabs now
+ */
+function groupTabsNow() {
+    try {
+        chrome.runtime.sendMessage({action: 'groupTabs'}, function(response) {
+            if (chrome.runtime.lastError) {
+                const msg = chrome.runtime.lastError.message;
+                if (msg.includes('Could not establish connection. Receiving end does not exist.')) {
+                    // Suppress this common error when service worker is inactive
+                    alert('Background script is not active. Please reload the extension or open a new tab to activate it.');
+                    return;
+                }
+                console.warn('Could not notify background script:', msg);
+                alert('Error: ' + msg);
+            } else if (response && response.success) {
+                console.log('Background script acknowledged groupTabs request');
+                alert('Tabs grouped successfully!');
+            } else {
+                console.warn('Could not notify background script: No receiving end');
+                alert('Error: Could not reach background script.');
+            }
+        });
+    } catch (e) {
+        console.warn('Could not notify background script:', e.message);
+        alert('Error: ' + e.message);
+    }
+}
+
 // Event listeners
-document.addEventListener('DOMContentLoaded', loadSettings);
+document.addEventListener('DOMContentLoaded', () => {
+    loadSettings();
+
+    // Add Group Tabs Now button dynamically
+    const groupButton = document.createElement('button');
+    groupButton.textContent = 'Group Tabs Now';
+    groupButton.style.marginLeft = '10px';
+    groupButton.addEventListener('click', groupTabsNow);
+
+    const saveButton = document.getElementById('saveSettings');
+    saveButton.insertAdjacentElement('afterend', groupButton);
+});
+
 document.getElementById('saveSettings').addEventListener('click', saveSettings);
 document.getElementById('similarityThreshold').addEventListener('input', function() {
     document.getElementById('similarityThresholdValue').textContent = this.value;
