@@ -68,6 +68,31 @@ function groupTabsTFIDF(tabs) {
     return groups;
 }
 
+// Generate a group title from the most common term in the group
+function generateGroupTitle(tabs) {
+    const termCounts = {};
+    for (const tab of tabs) {
+        const tokens = tokenize(`${tab.title} ${tab.url}`, {
+            removeStopWords: true,
+            removeWebStopWords: true,
+            minWordLength: 3,
+            toLowerCase: true
+        });
+        for (const token of tokens) {
+            termCounts[token] = (termCounts[token] || 0) + 1;
+        }
+    }
+    const sortedTerms = Object.entries(termCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([term]) => term);
+
+    let title = sortedTerms[0] || 'Group';
+    if (title.length > settings.maxGroupNameLength) {
+        title = title.slice(0, settings.maxGroupNameLength);
+    }
+    return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
 // Main QCO grouping function
 function groupTabsQuantumChaosOrganizer(tabs) {
     if (!tabs || tabs.length < 2) {
@@ -180,7 +205,8 @@ async function groupTabs() {
         const tabIds = group.map(t => t.id);
         try {
             const groupId = await chrome.tabs.group({ tabIds });
-            await chrome.tabGroups.update(groupId, { title: 'AI Group' });
+            const title = generateGroupTitle(group);
+            await chrome.tabGroups.update(groupId, { title });
         } catch (e) {
             console.warn('⚠️ Could not group tabs:', e);
         }
