@@ -30,6 +30,11 @@
  * of randomness parameters, and fallback mechanisms to traditional algorithms.
  */
 
+// Import utilities
+import { isStopWord } from '../utils/preprocessing.js';
+import { cosineSimilarity } from '../utils/math.js';
+
+
 /**
  * Simulates the Quantum Chaos Organizer (QCO) algorithm to group browser tabs.
  * @param {Array<Object>} tabs - Array of tab objects, each containing at least an id, title, and url.
@@ -135,6 +140,15 @@ function extractBasicFeatures(url, title) {
       return {};
     }
     
+    // Use imported isStopWord
+    const terms = (text.match(/\b\w{3,}\b/g) || [])
+      .filter(word => !isStopWord(word)); // Use imported function here
+
+    // If very few terms, return empty object to rely more on chaos
+    if (terms.length < 3) {
+      return {};
+    }
+
     // Convert to term frequency map
     return terms.reduce((acc, word) => {
       acc[word] = (acc[word] || 0) + 1;
@@ -146,31 +160,6 @@ function extractBasicFeatures(url, title) {
   }
 }
 
-/**
- * Check if a word is a common stop word
- * @param {string} word - The word to check
- * @returns {boolean} - True if the word is a stop word
- */
-function isStopWord(word) {
-  const stopWords = new Set([
-    'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'as', 'at',
-    'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by',
-    'can', 'com', 'could', 'did', 'do', 'does', 'doing', 'down', 'during',
-    'each', 'few', 'for', 'from', 'further',
-    'had', 'has', 'have', 'having', 'he', 'her', 'here', 'hers', 'herself', 'him', 'himself', 'his', 'how',
-    'i', 'if', 'in', 'into', 'is', 'it', 'its', 'itself',
-    'just', 'me', 'more', 'most', 'my', 'myself',
-    'no', 'nor', 'not', 'now', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
-    'same', 'she', 'should', 'so', 'some', 'such',
-    'than', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they', 'this', 'those', 'through', 'to', 'too',
-    'under', 'until', 'up', 'very',
-    'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'will', 'with',
-    'www', 'you', 'your', 'yours', 'yourself', 'yourselves',
-    'http', 'https', 'html', 'htm', 'php', 'asp', 'jsp', 'cgi', 'page', 'site', 'web', 'click', 'view'
-  ]);
-  
-  return stopWords.has(word.toLowerCase());
-}
 
 /**
  * Calculate similarity matrix between tabs
@@ -189,7 +178,8 @@ function calculateSimilarityMatrix(tabFeatures) {
       for (let j = i + 1; j < n; j++) {
         try {
           // Calculate content similarity
-          const contentSimilarity = calculateCosineSimilarity(
+          // Use imported cosineSimilarity
+          const contentSimilarity = cosineSimilarity(
             tabFeatures[i].features,
             tabFeatures[j].features
           );
@@ -234,50 +224,6 @@ function calculateSimilarityMatrix(tabFeatures) {
   }
 }
 
-/**
- * Calculate cosine similarity between two feature vectors
- * @param {Object} features1 - First feature vector
- * @param {Object} features2 - Second feature vector
- * @returns {number} - Similarity score between 0 and 1
- */
-function calculateCosineSimilarity(features1, features2) {
-  // Handle empty feature vectors
-  if (Object.keys(features1).length === 0 || Object.keys(features2).length === 0) {
-    return 0;
-  }
-  
-  try {
-    // Find all unique terms
-    const allTerms = new Set([...Object.keys(features1), ...Object.keys(features2)]);
-    
-    let dotProduct = 0;
-    let magnitude1 = 0;
-    let magnitude2 = 0;
-    
-    // Calculate dot product and magnitudes
-    for (const term of allTerms) {
-      const val1 = features1[term] || 0;
-      const val2 = features2[term] || 0;
-      
-      dotProduct += val1 * val2;
-      magnitude1 += val1 * val1;
-      magnitude2 += val2 * val2;
-    }
-    
-    magnitude1 = Math.sqrt(magnitude1);
-    magnitude2 = Math.sqrt(magnitude2);
-    
-    // Avoid division by zero
-    if (magnitude1 === 0 || magnitude2 === 0) {
-      return 0;
-    }
-    
-    return dotProduct / (magnitude1 * magnitude2);
-  } catch (error) {
-    console.error('❌ Error calculating cosine similarity:', error);
-    return 0;
-  }
-}
 
 /**
  * Apply chaos-weighted clustering to form tab groups
@@ -288,9 +234,9 @@ function calculateCosineSimilarity(features1, features2) {
 function chaosWeightedClustering(tabFeatures, similarityMatrix) {
   try {
     const n = tabFeatures.length;
-    
+
     // If we have very few tabs, apply simpler grouping logic
-    if (n <= 3) {
+    if (n < 3) { // Changed from <= 3 to < 3 as QCO already checks for < 3 earlier
       console.log('📊 Not enough tabs for complex clustering, applying simple grouping');
       return n === 0 ? [] : [tabFeatures.map(tab => ({
         id: tab.id,
@@ -308,9 +254,10 @@ function chaosWeightedClustering(tabFeatures, similarityMatrix) {
     console.log(`🎯 QCO using similarity threshold: ${similarityThreshold.toFixed(2)}`);
     
     // Step 1: Initialize each tab as its own cluster
-    let clusters = tabFeatures.map((tab, index) => ({
-      tabs: [tab],
-      index: index
+    // Ensure 'index' is correctly assigned based on the input tabFeatures array
+    let clusters = tabFeatures.map((tab, idx) => ({
+      tabs: [{...tab, index: idx}], // Store index within the tab object itself for consistency
+      index: idx // Keep top-level index for initial mapping if needed elsewhere
     }));
     
     // Step 2: Merge clusters based on similarity until no more merges are possible
@@ -428,24 +375,24 @@ function chaosWeightedClustering(tabFeatures, similarityMatrix) {
   } catch (error) {
     console.error('❌ Error in chaosWeightedClustering:', error);
     
-    // Return a simple fallback grouping
+    // Internal QCO fallback logic (previously in background.js or similar)
+    console.log('⚠️ QCO: Using internal fallback grouping method due to clustering error');
     const groupSize = 3;
     const fallbackGroups = [];
-    
+    // Use tabFeatures which contains the unpinned tabs
     for (let i = 0; i < tabFeatures.length; i += groupSize) {
       const group = tabFeatures.slice(i, i + groupSize).map(tab => ({
         id: tab.id,
-        pinned: tab.pinned,
+        pinned: tab.pinned, // Keep original pinned status if needed downstream
         url: tab.url,
         title: tab.title
       }));
-      
-      if (group.length >= 2) {
+      // Filter groups by size *after* mapping
+      if (group.length >= 2) { // Use a minimum size, e.g., 2 or 3
         fallbackGroups.push(group);
       }
     }
-    
-    console.log(`🧩 QCO error recovery produced ${fallbackGroups.length} simple groups`);
+    console.log(`🧩 QCO internal fallback (error recovery): Created ${fallbackGroups.length} groups`);
     return fallbackGroups;
   }
 }

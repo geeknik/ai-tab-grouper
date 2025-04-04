@@ -1,4 +1,7 @@
-// Import quantum chaos organizer module
+// Import utilities
+import { isStopWord, tokenize, preprocessDocument } from './src/utils/preprocessing.js';
+import { cosineSimilarity } from './src/utils/math.js';
+// Import quantum chaos organizer module (will be replaced later)
 let groupTabsQuantumChaosOrganizer = function(tabs) {
     console.log('🧪 QCO algorithm started with', tabs.length, 'tabs');
     
@@ -20,12 +23,14 @@ let groupTabsQuantumChaosOrganizer = function(tabs) {
             // Generate a chaos factor between 0.5 and 1.0
             // Higher values mean more randomness in grouping decisions
             const chaosFactor = 0.5 + (entropy * 0.5);
-            
-            // Extract term frequency
-            const terms = text.toLowerCase()
-                .split(/\W+/)
-                .filter(term => term.length > 2 && !isStopWord(term));
-            
+            // Use tokenize from preprocessing.js
+            const terms = tokenize(text, {
+                removeStopWords: true,
+                removeWebStopWords: true,
+                minWordLength: 3,
+                toLowerCase: true
+            });
+
             const termFreq = {};
             terms.forEach(term => {
                 termFreq[term] = (termFreq[term] || 0) + 1;
@@ -91,7 +96,8 @@ function calculateQuantumSimilarityMatrix(tabFeatures) {
         
         for (let j = i + 1; j < n; j++) {
             // Calculate deterministic content similarity
-            const contentSimilarity = calculateContentSimilarity(
+            // Use imported cosineSimilarity
+            const contentSimilarity = cosineSimilarity(
                 tabFeatures[i].terms,
                 tabFeatures[j].terms
             );
@@ -140,6 +146,7 @@ function calculateContentSimilarity(terms1, terms2) {
     if (magnitude1 === 0 || magnitude2 === 0) return 0;
     return dotProduct / (magnitude1 * magnitude2);
 }
+
 
 // Perform clustering with quantum chaos influence
 function quantumClustering(tabFeatures, similarityMatrix, threshold) {
@@ -240,6 +247,7 @@ function fallbackGrouping(tabs) {
     
     return groups;
 }
+
 
 // Log extension startup
 console.log('🚀 AI Tab Grouper extension starting up');
@@ -573,8 +581,13 @@ function isGroupableTab(tab) {
 
 // Updated TF-IDF tokenization
 function updateTFIDF(newDocument, docId) {
-    // Use regex matching to accurately extract words
-    const terms = (newDocument.toLowerCase().match(/\b\w+\b/g) || []).filter(term => term.length > 2 && !isStopWord(term));
+    // Use tokenize from preprocessing.js
+    const terms = tokenize(newDocument, {
+        removeStopWords: true,
+        removeWebStopWords: true,
+        minWordLength: 3,
+        toLowerCase: true
+    });
     const termFreq = {};
     const docLength = terms.length;
     
@@ -612,32 +625,16 @@ function updateTFIDF(newDocument, docId) {
     });
 }
 
-// Helper function to check if a word is a stop word
-function isStopWord(word) {
-    const stopWords = new Set([
-        'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'as', 'at',
-        'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by',
-        'can', 'com', 'could', 'did', 'do', 'does', 'doing', 'down', 'during',
-        'each', 'few', 'for', 'from', 'further',
-        'had', 'has', 'have', 'having', 'he', 'her', 'here', 'hers', 'herself', 'him', 'himself', 'his', 'how',
-        'i', 'if', 'in', 'into', 'is', 'it', 'its', 'itself',
-        'just', 'me', 'more', 'most', 'my', 'myself',
-        'no', 'nor', 'not', 'now', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
-        'same', 'she', 'should', 'so', 'some', 'such',
-        'than', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they', 'this', 'those', 'through', 'to', 'too',
-        'under', 'until', 'up', 'very',
-        'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'will', 'with',
-        'www', 'you', 'your', 'yours', 'yourself', 'yourselves',
-        // Common web terms that don't add meaning
-        'http', 'https', 'html', 'htm', 'php', 'asp', 'jsp', 'cgi', 'page', 'site', 'web', 'click', 'view'
-    ]);
-    
-    return stopWords.has(word.toLowerCase());
-}
 
 // Updated BM25 tokenization (similar to TF-IDF)
 function updateBM25(newDocument, docId) {
-    const terms = (newDocument.toLowerCase().match(/\b\w+\b/g) || []).filter(term => term.length > 2 && !isStopWord(term));
+    // Use tokenize from preprocessing.js
+    const terms = tokenize(newDocument, {
+        removeStopWords: true,
+        removeWebStopWords: true,
+        minWordLength: 3,
+        toLowerCase: true
+    });
     const termFreq = {};
     let docLength = terms.length;
     
@@ -689,10 +686,16 @@ function extractKeyphrases(text, numPhrases = 5) {
         .replace(/[^\w\s-]/g, ' ')  // Replace non-alphanumeric with spaces
         .replace(/\s+/g, ' ')       // Normalize whitespace
         .trim();
-    
+
     // Extract words and filter out stopwords and short words
-    const words = cleanText.split(/\s+/).filter(word => word.length > 2 && !isStopWord(word));
-    
+    // Use tokenize:
+    const words = tokenize(cleanText, {
+        removeStopWords: true,
+        removeWebStopWords: true,
+        minWordLength: 3,
+        toLowerCase: false // Keep original case for potential capitalization bonus logic
+    });
+
     // Build n-grams (2-word and 3-word phrases)
     const ngrams = [];
     const ngramFreq = {};
@@ -701,10 +704,12 @@ function extractKeyphrases(text, numPhrases = 5) {
     for (let n of [2, 3]) {
         for (let i = 0; i <= words.length - n; i++) {
             const phrase = words.slice(i, i + n).join(' ');
-            
+
             // Skip phrases that are all stopwords or too short
-            if (isStopPhrase(phrase) || phrase.length < 5) continue;
-            
+            // Replace with a check using the imported isStopWord:
+            const phraseWords = phrase.split(' ');
+            if (phraseWords.every(word => isStopWord(word)) || phrase.length < 5) continue;
+
             // Count frequency of each phrase
             ngramFreq[phrase] = (ngramFreq[phrase] || 0) + 1;
             ngrams.push(phrase);
@@ -748,14 +753,6 @@ function extractKeyphrases(text, numPhrases = 5) {
     return sortedPhrases;
 }
 
-function isStopPhrase(phrase) {
-    const stopWords = new Set([
-        'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
-        'is', 'this', 'about', 'that', 'and', 'or', 'but', 'from', 'as', 'it'
-    ]);
-    const words = phrase.split(' ');
-    return words.every(word => stopWords.has(word));
-}
 
 // Function to update keyphrases
 function updateKeyphrases(newDocument, docId) {
@@ -772,10 +769,14 @@ function updateLSA(newDocument, docId) {
     }
 
     // Tokenize and preprocess the document
-    const terms = newDocument.toLowerCase()
-        .split(/\W+/)
-        .filter(term => term.length > 2 && !isStopWord(term));
-    
+    // Use tokenize:
+    const terms = tokenize(newDocument, {
+        removeStopWords: true,
+        removeWebStopWords: true,
+        minWordLength: 3,
+        toLowerCase: true
+    });
+
     // Skip if not enough terms
     if (terms.length < 3) {
         lsaVectors[docId] = {};

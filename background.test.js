@@ -62,7 +62,7 @@ jest.mock('./src/quantumChaosOrganizer.js', () => ({
   groupTabsQuantumChaosOrganizer: jest.fn()
 }));
 
-// Import the mocked module
+// Update the import path
 import { groupTabsQuantumChaosOrganizer } from './src/quantumChaosOrganizer.js';
 
 // Mock chrome API and global settings
@@ -290,23 +290,27 @@ describe('Tab Grouping Extension', () => {
       // Set up mocks
       chrome.tabs.query.mockResolvedValue(tabs);
       
-      // Set up QCO mock
-      const nonPinnedTabs = tabs.filter(tab => !tab.pinned);
-      groupTabsQuantumChaosOrganizer.mockReturnValue([nonPinnedTabs]);
+      // Prepare expected input for the mocked QCO function
+      const expectedQcoInput = tabs
+          .filter(tab => !tab.pinned)
+          .map(t => ({ id: t.id, url: t.url, title: t.title, pinned: t.pinned })); // Match input format
+
+      // Setup mock return value based on the expected input structure
+      const mockGroupResult = [ expectedQcoInput.map(t => ({ id: t.id, url: t.url, title: t.title })) ]; // QCO returns groups of tab objects
+      groupTabsQuantumChaosOrganizer.mockReturnValue(mockGroupResult);
 
       // Load settings and execute groupTabs
-      await loadSettings();
-      await groupTabs();
+      await loadSettings(); // Ensure settings are loaded with 'qco'
+      global.settings.groupingAlgorithm = 'qco'; // Force setting for test if needed
+      await groupTabs(); // Call the main function
 
-      // Verify QCO was called correctly
+      // Verify the mock was called with the correct, filtered tabs
       expect(groupTabsQuantumChaosOrganizer).toHaveBeenCalledTimes(1);
-      expect(groupTabsQuantumChaosOrganizer).toHaveBeenCalledWith(
-        expect.arrayContaining(nonPinnedTabs)
-      );
-      
-      // Verify tabs were grouped correctly
+      expect(groupTabsQuantumChaosOrganizer).toHaveBeenCalledWith(expectedQcoInput);
+
+      // Verify chrome.tabs.group was called based on the mock's return value
       expect(chrome.tabs.group).toHaveBeenCalledWith({
-        tabIds: [2, 3]
+          tabIds: expectedQcoInput.map(t => t.id) // Extract IDs from the mock input/output
       });
     });
 
@@ -372,17 +376,16 @@ describe('Tab Grouping Extension', () => {
 });
 
 describe('Clustering Filter Tests', () => {
-  const { clusterTabs } = require('./background.js');
-  
-  // Helper cosine similarity: simple function that returns 1 if same, 0 otherwise
-  function simpleCosine(doc1, doc2) {
-    // Assume all vectors equal for testing
-    return 1;
-  }
-  
-  // Override cosineSimilarity in our test scope if needed
-  // For testing, we assume our clusterTabs uses cosineSimilarity for non-keyphrase algorithms.
-  
+  // Import the function to test
+  const { clusterTabs, hierarchicalAgglomerativeClustering } = require('./background.js');
+  // Import the function we need to mock/control
+  const { cosineSimilarity } = require('./src/utils/math.js'); // Adjust path if necessary
+
+  beforeEach(() => {
+    // Reset mocks before each test
+    cosineSimilarity.mockClear();
+  });
+
   test('clusterTabs filters out clusters with less than 3 tabs', () => {
     // Create a simulated tabVectors object.
     // Let's assume each tab vector is identical so cosine similarity always 1 > threshold
@@ -394,32 +397,27 @@ describe('Clustering Filter Tests', () => {
       '4': { a: 0 }, // This one will be isolated if similarity is 0
       '5': { a: 0 }  // Similar to 4 so cluster of size 2
     };
-    // To simulate isolation for tabs 4 and 5, we override cosineSimilarity to return 0 when one of them is compared with any tab having value 1
-    const originalCosine = global.cosineSimilarity;
-    global.cosineSimilarity = (vec1, vec2) => {
+    // Configure the mock implementation for this specific test
+    cosineSimilarity.mockImplementation((vec1, vec2) => {
       if ((vec1.a === 1 && vec2.a === 1) || (vec1.a === 0 && vec2.a === 0)) {
         return 1;
       }
       return 0;
-    };
-    
+    });
+
     // Set similarityThreshold to 0.5 in settings
     global.settings = { similarityThreshold: 0.5 };
-    
+
     const clusters = clusterTabs(tabVectors);
-    
+
     // Expected: Only the cluster with tabs '1','2','3' should be returned, group with tabs '4' and '5' is filtered out
     expect(clusters).toEqual([['1', '2', '3']]);
-    
-    // Restore original cosineSimilarity if needed
-    global.cosineSimilarity = originalCosine;
+    // Verify mock usage if needed
+    // expect(cosineSimilarity).toHaveBeenCalled();
   });
 
   test('hierarchicalAgglomerativeClustering filters out clusters with less than 3 tabs', () => {
-    // Here we simulate a scenario for hierarchicalAgglomerativeClustering using similar setup as above.
-    const { hierarchicalAgglomerativeClustering } = require('./background.js');
-    
-    // Create simulated tabVectors
+     // ... setup tabVectors ...
     const tabVectors = {
       '1': { a: 1 },
       '2': { a: 1 },
@@ -429,29 +427,24 @@ describe('Clustering Filter Tests', () => {
       '6': { a: 1 }
     };
 
-    // Override cosineSimilarity similarly
-    const originalCosine = global.cosineSimilarity;
-    global.cosineSimilarity = (vec1, vec2) => {
+    // Configure the mock implementation for this specific test
+    cosineSimilarity.mockImplementation((vec1, vec2) => {
       if ((vec1.a === 1 && vec2.a === 1) || (vec1.a === 0 && vec2.a === 0)) {
         return 1;
       }
       return 0;
-    };
-    
+    });
+
     // Set similarityThreshold to 0.5 in settings
     global.settings = { similarityThreshold: 0.5 };
-    
+
     const clusters = hierarchicalAgglomerativeClustering(tabVectors);
-    
-    // Expect cluster with tabs that have a=1: tabs '1','2','3','6' (size 4) to exist, and group with a=0
-    // tabs '4' and '5' form a cluster of size 2 which should be filtered out
+
+    // ... assertions ...
     const expectedCluster = ['1', '2', '3', '6'];
     // Since order might vary, sort the clusters for comparison
     const sortedClusters = clusters.map(cluster => cluster.sort());
     expect(sortedClusters).toContainEqual(expectedCluster.sort());
     expect(clusters.some(cluster => cluster.length === 2)).toBe(false);
-    
-    // Restore original cosineSimilarity
-    global.cosineSimilarity = originalCosine;
   });
 });

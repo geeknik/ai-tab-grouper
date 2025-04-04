@@ -162,6 +162,19 @@ export function preprocessDocument(text, options = {}) {
         };
     }
 
+    /**
+     * Checks if a word is a common English or web-specific stop word.
+     * @param {string} word - The word to check (case-insensitive).
+     * @returns {boolean} True if the word is a stop word, false otherwise.
+     */
+    export function isStopWord(word) {
+        if (!word || typeof word !== 'string') {
+            return false;
+        }
+        const lowerWord = word.toLowerCase();
+        return STOP_WORDS.has(lowerWord) || WEB_STOP_WORDS.has(lowerWord);
+    }
+
     const termFreq = calculateTermFrequency(tokens);
     const normalizedFreq = normalizeVector(termFreq, options.normalization);
     const uniqueTerms = new Set(tokens);
