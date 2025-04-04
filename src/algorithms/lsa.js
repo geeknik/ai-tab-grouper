@@ -181,8 +181,8 @@ export class LSA {
 
         try {
             // Defensive: limit matrix size to avoid stack overflow
-            const maxRows = 500;
-            const maxCols = 500;
+            const maxRows = 200;
+            const maxCols = 200;
             if (matrix.length > maxRows || matrix[0].length > maxCols) {
                 console.warn(`LSA matrix too large (${matrix.length}x${matrix[0].length}), truncating to ${maxRows}x${maxCols}`);
                 matrix.length = Math.min(matrix.length, maxRows);
