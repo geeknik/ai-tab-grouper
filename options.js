@@ -1,13 +1,15 @@
-// Function to save settings
+/**
+ * Save settings to chrome.storage.sync and notify background script
+ */
 function saveSettings() {
     const settings = {
         groupingAlgorithm: document.getElementById('groupingAlgorithm').value,
         similarityThreshold: parseFloat(document.getElementById('similarityThreshold').value),
-        groupingInterval: parseInt(document.getElementById('groupingInterval').value),
-        maxGroupNameLength: parseInt(document.getElementById('maxGroupNameLength').value),
+        groupingInterval: parseInt(document.getElementById('groupingInterval').value, 10),
+        maxGroupNameLength: parseInt(document.getElementById('maxGroupNameLength').value, 10),
         bm25k1: parseFloat(document.getElementById('bm25k1').value),
         bm25b: parseFloat(document.getElementById('bm25b').value),
-        lsaDimensions: parseInt(document.getElementById('lsaDimensions').value || 50)
+        lsaDimensions: parseInt(document.getElementById('lsaDimensions').value, 10)
     };
 
     chrome.storage.sync.set(settings, function() {
@@ -21,21 +23,25 @@ function saveSettings() {
             saveButton.textContent = originalText;
             saveButton.style.backgroundColor = '#4CAF50';
         }, 2000);
-        
-        // Notify the background script to update its settings
-        chrome.runtime.sendMessage({action: 'updateSettings'}, response => {
-            // Handle potential error with the background page not being ready
-            if (chrome.runtime.lastError) {
-                console.warn('Could not notify background script:', chrome.runtime.lastError.message);
-                // Continue anyway - settings will be loaded next time background runs
-            } else if (response && response.success) {
-                console.log('Background script acknowledged settings update');
-            }
-        });
+
+        // Notify background script, but suppress error if not connected
+        try {
+            chrome.runtime.sendMessage({action: 'updateSettings'}, function(response) {
+                if (chrome.runtime.lastError) {
+                    console.warn('Could not notify background script:', chrome.runtime.lastError.message);
+                } else if (response && response.success) {
+                    console.log('Background script acknowledged settings update');
+                }
+            });
+        } catch (e) {
+            console.warn('Could not notify background script:', e.message);
+        }
     });
 }
 
-// Function to load settings
+/**
+ * Load settings from chrome.storage.sync and update UI
+ */
 function loadSettings() {
     chrome.storage.sync.get({
         groupingAlgorithm: 'tfidf',
@@ -54,22 +60,21 @@ function loadSettings() {
         document.getElementById('bm25k1').value = items.bm25k1;
         document.getElementById('bm25b').value = items.bm25b;
         document.getElementById('lsaDimensions').value = items.lsaDimensions;
-        
-        // Update UI based on loaded settings
+
         toggleAlgorithmSettings();
         showAlgorithmDescription(items.groupingAlgorithm);
     });
 }
 
-// Function to toggle algorithm-specific settings visibility
+/**
+ * Toggle visibility of algorithm-specific settings sections
+ */
 function toggleAlgorithmSettings() {
     const algorithm = document.getElementById('groupingAlgorithm').value;
-    
-    // Hide all algorithm-specific settings first
+
     document.getElementById('bm25Settings').style.display = 'none';
     document.getElementById('lsaSettings').style.display = 'none';
-    
-    // Show settings for the selected algorithm
+
     if (algorithm === 'bm25') {
         document.getElementById('bm25Settings').style.display = 'block';
     } else if (algorithm === 'lsa') {
@@ -77,15 +82,15 @@ function toggleAlgorithmSettings() {
     }
 }
 
-// Function to show the description for the selected algorithm
+/**
+ * Show the description panel for the selected algorithm
+ */
 function showAlgorithmDescription(algorithm) {
-    // Hide all descriptions first
     const descriptions = document.querySelectorAll('.algorithm-description');
     descriptions.forEach(desc => {
         desc.style.display = 'none';
     });
-    
-    // Show the selected algorithm's description
+
     const selectedDesc = document.getElementById(`${algorithm}-description`);
     if (selectedDesc) {
         selectedDesc.style.display = 'block';
@@ -98,8 +103,6 @@ document.getElementById('saveSettings').addEventListener('click', saveSettings);
 document.getElementById('similarityThreshold').addEventListener('input', function() {
     document.getElementById('similarityThresholdValue').textContent = this.value;
 });
-
-// Update UI when algorithm changes
 document.getElementById('groupingAlgorithm').addEventListener('change', function() {
     toggleAlgorithmSettings();
     showAlgorithmDescription(this.value);
