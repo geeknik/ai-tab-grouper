@@ -137,14 +137,11 @@ function groupTabsNow() {
 document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
 
-    // Add Group Tabs Now button dynamically
-    const groupButton = document.createElement('button');
-    groupButton.textContent = 'Group Tabs Now';
-    groupButton.style.marginLeft = '10px';
-    groupButton.addEventListener('click', groupTabsNow);
-
-    const saveButton = document.getElementById('saveSettings');
-    saveButton.insertAdjacentElement('afterend', groupButton);
+    // Attach event listener to static Group Tabs Now button
+    const groupButton = document.getElementById('groupTabsNow');
+    if (groupButton) {
+        groupButton.addEventListener('click', groupTabsNow);
+    }
 });
 
 document.getElementById('saveSettings').addEventListener('click', saveSettings);
