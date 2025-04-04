@@ -314,7 +314,7 @@ function setupEventListeners() {
 }
 
 // Load settings
-export async function loadSettings() {
+async function loadSettings() {
     console.log('📣 Loading extension settings');
     try {
         const items = await chrome.storage.sync.get({
