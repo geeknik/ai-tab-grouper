@@ -17,7 +17,6 @@ function calculateTabEntropy(url) {
 
 // Placeholder for QCO similarity matrix calculation
 function calculateQuantumSimilarityMatrix(tabFeatures) {
-    // For now, just return a dummy similarity matrix with 1s on diagonal
     const n = tabFeatures.length;
     const matrix = Array.from({ length: n }, () => Array(n).fill(0));
     for (let i = 0; i < n; i++) {
@@ -32,7 +31,44 @@ function quantumClustering(tabFeatures, similarityMatrix, threshold) {
     return [tabFeatures.map(f => ({ id: f.id, url: f.url, title: f.title }))];
 }
 
-// QCO grouping function
+// Simple fallback grouping
+function fallbackGrouping(tabs) {
+    const groups = [];
+    const groupSize = 3;
+    for (let i = 0; i < tabs.length; i += groupSize) {
+        const group = tabs.slice(i, i + groupSize);
+        if (group.length >= 2) groups.push(group);
+    }
+    return groups;
+}
+
+// TF-IDF based grouping
+function groupTabsTFIDF(tabs) {
+    const docs = tabs.map(tab => preprocessDocument(`${tab.title} ${tab.url}`));
+    const vectors = docs.map(d => d.normalizedFreq);
+
+    const groups = [];
+    const assigned = new Set();
+
+    for (let i = 0; i < tabs.length; i++) {
+        if (assigned.has(i)) continue;
+        const group = [tabs[i]];
+        assigned.add(i);
+
+        for (let j = 0; j < tabs.length; j++) {
+            if (i === j || assigned.has(j)) continue;
+            const sim = cosineSimilarity(vectors[i], vectors[j]);
+            if (sim >= settings.similarityThreshold) {
+                group.push(tabs[j]);
+                assigned.add(j);
+            }
+        }
+        if (group.length >= 2) groups.push(group);
+    }
+    return groups;
+}
+
+// Main QCO grouping function
 function groupTabsQuantumChaosOrganizer(tabs) {
     if (!tabs || tabs.length < 2) {
         console.warn('⚠️ QCO: Not enough tabs for meaningful analysis');
@@ -78,17 +114,6 @@ function groupTabsQuantumChaosOrganizer(tabs) {
         console.log('⚠️ QCO: Using fallback grouping method');
         return fallbackGrouping(tabs);
     }
-}
-
-// Simple fallback grouping
-function fallbackGrouping(tabs) {
-    const groups = [];
-    const groupSize = 3;
-    for (let i = 0; i < tabs.length; i += groupSize) {
-        const group = tabs.slice(i, i + groupSize);
-        if (group.length >= 2) groups.push(group);
-    }
-    return groups;
 }
 
 // Log extension startup
@@ -139,11 +164,15 @@ async function groupTabs() {
     const groupableTabs = tabs.filter(isGroupableTab);
 
     let groups = [];
-    if (settings.groupingAlgorithm === 'qco') {
-        groups = groupTabsQuantumChaosOrganizer(groupableTabs);
-    } else {
-        // fallback: group all tabs together
-        groups = [groupableTabs];
+    switch (settings.groupingAlgorithm) {
+        case 'tfidf':
+            groups = groupTabsTFIDF(groupableTabs);
+            break;
+        case 'qco':
+            groups = groupTabsQuantumChaosOrganizer(groupableTabs);
+            break;
+        default:
+            groups = [groupableTabs];
     }
 
     for (const group of groups) {
